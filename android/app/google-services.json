@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "486238943036",
+    "project_id": "restaurant-waiter-order-system",
+    "storage_bucket": "restaurant-waiter-order-system.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:486238943036:android:6a7ff8c6f546d9feab1039",
+        "android_client_info": {
+          "package_name": "com.example.resto_order"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmmbejZO5cIk4xDoMg_el0LGZNM1w4JA0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
