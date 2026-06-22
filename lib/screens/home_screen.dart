@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../services/menu_service.dart';
+import '../services/order_service.dart';
 import 'menu/menu_list_screen.dart';
 import 'orders/orders_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({this.menuService, super.key});
+  const HomeScreen({this.menuService, this.orderService, super.key});
 
   final MenuService? menuService;
+  final OrderService? orderService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -19,7 +21,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const OrdersListScreen(),
+      OrdersListScreen(
+        orderService: widget.orderService,
+        menuService: widget.menuService,
+        onGoToMenu: () {
+          setState(() {
+            _selectedIndex = 1;
+          });
+        },
+      ),
       MenuListScreen(menuService: widget.menuService),
     ];
 

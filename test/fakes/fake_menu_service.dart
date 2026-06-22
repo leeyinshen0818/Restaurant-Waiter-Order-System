@@ -4,7 +4,8 @@ import 'package:resto_order/services/menu_service.dart';
 class FakeMenuService implements MenuService {
   FakeMenuService({Stream<List<RestaurantMenuItem>>? menuItemsStream})
     : _menuItemsStream =
-          menuItemsStream ?? Stream.value(const <RestaurantMenuItem>[]);
+          (menuItemsStream ?? Stream.value(const <RestaurantMenuItem>[]))
+              .asBroadcastStream();
 
   final Stream<List<RestaurantMenuItem>> _menuItemsStream;
   RestaurantMenuItem? addedItem;

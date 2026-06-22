@@ -27,7 +27,8 @@ class NewOrderScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (context) => const OrderDetailScreen(),
+                      builder: (context) =>
+                          const OrderDetailScreen(orderId: 'placeholder'),
                     ),
                   );
                 },
