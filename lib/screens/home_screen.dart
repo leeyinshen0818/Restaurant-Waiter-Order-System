@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../services/menu_service.dart';
 import 'menu/menu_list_screen.dart';
 import 'orders/orders_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({this.menuService, super.key});
+
+  final MenuService? menuService;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -13,12 +16,15 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _screens = [OrdersListScreen(), MenuListScreen()];
-
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const OrdersListScreen(),
+      MenuListScreen(menuService: widget.menuService),
+    ];
+
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _screens),
+      body: IndexedStack(index: _selectedIndex, children: screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {

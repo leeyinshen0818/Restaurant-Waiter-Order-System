@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
+import 'services/menu_service.dart';
 import 'theme/app_theme.dart';
 
 class RestaurantWaiterApp extends StatelessWidget {
-  const RestaurantWaiterApp({super.key});
+  const RestaurantWaiterApp({this.menuService, super.key});
+
+  final MenuService? menuService;
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +15,7 @@ class RestaurantWaiterApp extends StatelessWidget {
       title: 'Restaurant Waiter Order System',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const HomeScreen(),
+      home: HomeScreen(menuService: menuService),
     );
   }
 }

@@ -1,9 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:resto_order/app.dart';
 
+import 'fakes/fake_menu_service.dart';
+
 void main() {
   testWidgets('opens on the Orders screen', (tester) async {
-    await tester.pumpWidget(const RestaurantWaiterApp());
+    await tester.pumpWidget(
+      RestaurantWaiterApp(menuService: FakeMenuService()),
+    );
 
     expect(find.text('Restaurant Orders'), findsOneWidget);
     expect(find.text('No orders yet'), findsOneWidget);
@@ -11,13 +15,15 @@ void main() {
   });
 
   testWidgets('switches to the Menu screen', (tester) async {
-    await tester.pumpWidget(const RestaurantWaiterApp());
+    await tester.pumpWidget(
+      RestaurantWaiterApp(menuService: FakeMenuService()),
+    );
 
     await tester.tap(find.text('Menu'));
     await tester.pumpAndSettle();
 
     expect(find.text('Restaurant Menu'), findsOneWidget);
     expect(find.text('No menu items yet'), findsOneWidget);
-    expect(find.text('Add Menu Item'), findsOneWidget);
+    expect(find.text('Add Menu Item'), findsNWidgets(2));
   });
 }
