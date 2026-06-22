@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/restaurant_menu_item.dart';
+import '../../services/menu_seed_service.dart';
 import '../../services/menu_service.dart';
 import '../../widgets/menu_item_card.dart';
 import '../../widgets/screen_header.dart';
@@ -18,6 +20,7 @@ class MenuListScreen extends StatefulWidget {
 class _MenuListScreenState extends State<MenuListScreen> {
   late final MenuService _menuService;
   late Stream<List<RestaurantMenuItem>> _menuItemsStream;
+  MenuSeedService? _menuSeedService;
   final Set<String> _updatingAvailabilityIds = {};
 
   @override
@@ -122,6 +125,32 @@ class _MenuListScreenState extends State<MenuListScreen> {
     );
   }
 
+  Future<void> _confirmSeedMenu() async {
+    final result = await showDialog<_SeedResult>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _SeedMenuDialog(
+        menuSeedService: _menuSeedService ??= MenuSeedService(),
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final message = switch (result) {
+      _SeedResult.seeded =>
+        '${MenuSeedService.sampleMenuItems.length} sample menu items '
+            'added successfully.',
+      _SeedResult.skipped =>
+        'Sample menu was not added because menu items already exist.',
+    };
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -150,7 +179,10 @@ class _MenuListScreenState extends State<MenuListScreen> {
 
                     final items = snapshot.data ?? const <RestaurantMenuItem>[];
                     if (items.isEmpty) {
-                      return _MenuEmptyState(onAddItem: () => _openMenuForm());
+                      return _MenuEmptyState(
+                        onAddItem: () => _openMenuForm(),
+                        onLoadSampleMenu: kDebugMode ? _confirmSeedMenu : null,
+                      );
                     }
 
                     return ListView.separated(
@@ -206,9 +238,10 @@ class _MenuLoadingState extends StatelessWidget {
 }
 
 class _MenuEmptyState extends StatelessWidget {
-  const _MenuEmptyState({required this.onAddItem});
+  const _MenuEmptyState({required this.onAddItem, this.onLoadSampleMenu});
 
   final VoidCallback onAddItem;
+  final VoidCallback? onLoadSampleMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +276,14 @@ class _MenuEmptyState extends StatelessWidget {
                 icon: const Icon(Icons.add),
                 label: const Text('Add Menu Item'),
               ),
+              if (onLoadSampleMenu != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: onLoadSampleMenu,
+                  icon: const Icon(Icons.playlist_add),
+                  label: const Text('Load Sample Menu'),
+                ),
+              ],
             ],
           ),
         ),
@@ -292,6 +333,89 @@ class _MenuErrorState extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+enum _SeedResult { seeded, skipped }
+
+class _SeedMenuDialog extends StatefulWidget {
+  const _SeedMenuDialog({required this.menuSeedService});
+
+  final MenuSeedService menuSeedService;
+
+  @override
+  State<_SeedMenuDialog> createState() => _SeedMenuDialogState();
+}
+
+class _SeedMenuDialogState extends State<_SeedMenuDialog> {
+  bool _isSeedingMenu = false;
+
+  Future<void> _seedMenu() async {
+    if (_isSeedingMenu) {
+      return;
+    }
+
+    setState(() {
+      _isSeedingMenu = true;
+    });
+
+    try {
+      await widget.menuSeedService.seedMenuIfEmpty();
+      if (!mounted) {
+        return;
+      }
+      Navigator.pop(context, _SeedResult.seeded);
+    } on MenuSeedSkippedException {
+      if (!mounted) {
+        return;
+      }
+      Navigator.pop(context, _SeedResult.skipped);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isSeedingMenu = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to load the sample menu. '
+            'Please check your connection and try again.',
+          ),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Load Sample Menu?'),
+      content: const Text(
+        'This will add 15 sample food and drink items to the empty menu '
+        'for development and testing.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSeedingMenu ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _isSeedingMenu ? null : _seedMenu,
+          child: _isSeedingMenu
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text('Load Menu'),
+        ),
+      ],
     );
   }
 }

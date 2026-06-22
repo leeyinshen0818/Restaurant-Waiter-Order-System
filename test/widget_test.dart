@@ -25,5 +25,6 @@ void main() {
     expect(find.text('Restaurant Menu'), findsOneWidget);
     expect(find.text('No menu items yet'), findsOneWidget);
     expect(find.text('Add Menu Item'), findsNWidgets(2));
+    expect(find.text('Load Sample Menu'), findsOneWidget);
   });
 }
