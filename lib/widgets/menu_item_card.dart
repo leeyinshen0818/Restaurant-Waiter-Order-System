@@ -32,7 +32,7 @@ class MenuItemCard extends StatelessWidget {
           side: BorderSide(color: theme.colorScheme.outline),
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 10, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -45,14 +45,14 @@ class MenuItemCard extends StatelessWidget {
                       children: [
                         Text(
                           item.name,
-                          style: theme.textTheme.titleLarge,
+                          style: theme.textTheme.titleMedium,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 2),
                         Text(
                           item.category,
-                          style: theme.textTheme.bodyMedium,
+                          style: theme.textTheme.bodySmall,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -66,19 +66,20 @@ class MenuItemCard extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: Text(
                         'RM ${item.price.toStringAsFixed(2)}',
-                        style: theme.textTheme.titleLarge?.copyWith(
+                        style: theme.textTheme.titleMedium?.copyWith(
                           color: theme.colorScheme.primary,
-                          fontSize: 17,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 4,
+                runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 alignment: WrapAlignment.spaceBetween,
                 children: [
@@ -106,13 +107,17 @@ class MenuItemCard extends StatelessWidget {
                       IconButton(
                         onPressed: onEdit,
                         tooltip: 'Edit ${item.name}',
-                        icon: const Icon(Icons.edit_outlined),
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.edit_outlined, size: 20),
                       ),
                       IconButton(
                         onPressed: onDelete,
                         tooltip: 'Delete ${item.name}',
                         color: theme.colorScheme.error,
-                        icon: const Icon(Icons.delete_outline),
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(Icons.delete_outline, size: 20),
                       ),
                     ],
                   ),
@@ -140,7 +145,7 @@ class _AvailabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: available
             ? availableColor.withValues(alpha: 0.12)
@@ -149,7 +154,7 @@ class _AvailabilityBadge extends StatelessWidget {
       ),
       child: Text(
         available ? 'Available' : 'Unavailable',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: available ? availableColor : mutedColor,
           fontWeight: FontWeight.w700,
         ),

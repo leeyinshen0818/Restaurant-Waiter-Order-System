@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const Color primaryDark = Color(0xFF2D2926);
-  static const Color primaryDarkHover = Color(0xFF211E1C);
-  static const Color primaryTerracotta = Color(0xFFC4623F);
-  static const Color darkTerracotta = Color(0xFFA84B30);
-  static const Color softTerracotta = Color(0xFFF4E3DC);
-  static const Color backgroundCream = Color(0xFFF7F5F2);
+  static const Color primaryDark = Color(0xFF1B4332);
+  static const Color primaryDarkHover = Color(0xFF081C15);
+  static const Color primaryTerracotta = Color(0xFFD4AF37);
+  static const Color darkTerracotta = Color(0xFFB08D2C);
+  static const Color softTerracotta = Color(0xFFFDF6E3);
+  static const Color backgroundCream = Color(0xFFFDFBF7);
   static const Color cardBackground = Color(0xFFFFFFFF);
   static const Color mainText = Color(0xFF292624);
   static const Color secondaryText = Color(0xFF746E68);
@@ -56,12 +56,13 @@ abstract final class AppTheme {
     ),
     cardTheme: CardThemeData(
       color: cardBackground,
-      elevation: 0,
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.15),
       margin: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: border),
+        side: BorderSide.none,
       ),
     ),
     dialogTheme: DialogThemeData(

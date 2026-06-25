@@ -530,124 +530,168 @@ class _NewOrderScreenState extends State<NewOrderScreen>
               resizeToAvoidBottomInset: true,
               body: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ScreenHeader(
-                        title: _isEditMode ? 'Edit Order' : 'New Order',
-                        subtitle: _isEditMode
-                            ? 'Update the table or selected items'
-                            : 'Select a table and add menu items',
-                      ),
-                      const SizedBox(height: 16),
-                      _OrderFlowTabs(
-                        controller: _tabController,
-                        itemCount: _selectedItemCount,
-                        selectedTable: _selectedTable,
-                      ),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isTablet = constraints.maxWidth >= 768;
+
+                      final tableSection = _SectionCard(
+                        title: 'Select Table',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _OrderFlowTabPage(
-                              child: _SectionCard(
-                                title: 'Select Table',
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (ordersSnapshot.connectionState ==
-                                        ConnectionState.waiting) ...[
-                                      const LinearProgressIndicator(),
-                                      const SizedBox(height: 12),
-                                    ],
-                                    TableSelectionGrid(
-                                      tables: List.generate(
-                                        20,
-                                        (index) => index + 1,
-                                      ),
-                                      occupiedTables: occupiedTables,
-                                      selectedTable: _selectedTable,
-                                      onTableSelected: _selectTable,
-                                    ),
-                                    if (_selectedTable != null &&
-                                        occupiedTables.contains(
-                                          _selectedTable,
-                                        )) ...[
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'This table already has an active order.',
-                                        style: TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.error,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                    if (_selectedTable != null &&
-                                        !occupiedTables.contains(
-                                          _selectedTable,
-                                        )) ...[
-                                      const SizedBox(height: 14),
-                                      _SelectedTableHint(
-                                        tableNo: _selectedTable!,
-                                        onContinue: () => _tabController
-                                            .animateTo(_menuTabIndex),
-                                      ),
-                                    ],
-                                  ],
+                            if (ordersSnapshot.connectionState ==
+                                ConnectionState.waiting) ...[
+                              const LinearProgressIndicator(),
+                              const SizedBox(height: 12),
+                            ],
+                            TableSelectionGrid(
+                              tables: List.generate(20, (index) => index + 1),
+                              occupiedTables: occupiedTables,
+                              selectedTable: _selectedTable,
+                              onTableSelected: _selectTable,
+                            ),
+                            if (_selectedTable != null &&
+                                occupiedTables.contains(_selectedTable)) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                'This table already has an active order.',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                            ),
-                            _OrderFlowTabPage(
-                              child: _SectionCard(
-                                title: 'Select Menu Items',
-                                child: _MenuItemsSection(
-                                  snapshot: menuSnapshot,
-                                  selectedCategory: _selectedCategory,
-                                  searchController: _searchController,
-                                  selectedQuantities: _selectedQuantities,
-                                  onCategorySelected: _setCategory,
-                                  onAdd: _addItem,
-                                  onIncrement: _incrementItem,
-                                  onDecrement: _decrementItem,
-                                  onGoBack: _goBackToMenuOrPreviousScreen,
-                                  formatPrice: _formatPrice,
-                                ),
+                            ],
+                            if (_selectedTable != null &&
+                                !occupiedTables.contains(_selectedTable)) ...[
+                              const SizedBox(height: 14),
+                              _SelectedTableHint(
+                                tableNo: _selectedTable!,
+                                onContinue: () =>
+                                    _tabController.animateTo(_menuTabIndex),
                               ),
-                            ),
-                            _OrderFlowTabPage(
-                              child: _SectionCard(
-                                title: 'Current Order',
-                                child: _CurrentOrderSection(
-                                  selectedItems: _cartItems,
-                                  selectedQuantities: _selectedQuantities,
-                                  onIncrement: _incrementItem,
-                                  onDecrement: _decrementItem,
-                                  unavailableExistingItemIds:
-                                      _unavailableExistingItemIds,
-                                  formatPrice: _formatPrice,
-                                ),
-                              ),
-                            ),
+                            ],
                           ],
                         ),
-                      ),
-                    ],
+                      );
+
+                      final menuSection = _SectionCard(
+                        title: 'Select Menu Items',
+                        child: _MenuItemsSection(
+                          snapshot: menuSnapshot,
+                          selectedCategory: _selectedCategory,
+                          searchController: _searchController,
+                          selectedQuantities: _selectedQuantities,
+                          onCategorySelected: _setCategory,
+                          onAdd: _addItem,
+                          onIncrement: _incrementItem,
+                          onDecrement: _decrementItem,
+                          onGoBack: _goBackToMenuOrPreviousScreen,
+                          formatPrice: _formatPrice,
+                        ),
+                      );
+
+                      final cartSection = _SectionCard(
+                        title: 'Current Order',
+                        child: _CurrentOrderSection(
+                          selectedItems: _cartItems,
+                          selectedQuantities: _selectedQuantities,
+                          onIncrement: _incrementItem,
+                          onDecrement: _decrementItem,
+                          unavailableExistingItemIds:
+                              _unavailableExistingItemIds,
+                          formatPrice: _formatPrice,
+                        ),
+                      );
+
+                      if (isTablet) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: ListView(
+                                padding: const EdgeInsets.only(right: 16),
+                                children: [
+                                  ScreenHeader(
+                                    title: _isEditMode
+                                        ? 'Edit Order'
+                                        : 'New Order',
+                                    subtitle: _isEditMode
+                                        ? 'Update the table or selected items'
+                                        : 'Select a table and add menu items',
+                                  ),
+                                  const SizedBox(height: 24),
+                                  tableSection,
+                                  const SizedBox(height: 24),
+                                  menuSection,
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 4,
+                              child: ListView(children: [cartSection]),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ScreenHeader(
+                            title: _isEditMode ? 'Edit Order' : 'New Order',
+                            subtitle: _isEditMode
+                                ? 'Update the table or selected items'
+                                : 'Select a table and add menu items',
+                          ),
+                          const SizedBox(height: 12),
+                          _OrderFlowTabs(
+                            controller: _tabController,
+                            itemCount: _selectedItemCount,
+                            selectedTable: _selectedTable,
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: TabBarView(
+                              controller: _tabController,
+                              children: [
+                                _OrderFlowTabPage(child: tableSection),
+                                _OrderFlowTabPage(child: menuSection),
+                                _OrderFlowTabPage(child: cartSection),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
-              bottomNavigationBar: _BottomOrderSummary(
-                itemCount: _selectedItemCount,
-                total: _orderTotal,
-                isSaving: _isSaving,
-                canPlaceOrder: _canPlaceOrder,
-                onPlaceOrder: _reviewAndPlaceOrder,
-                formatPrice: _formatPrice,
-                buttonLabel: _isEditMode ? 'Review Changes' : null,
-                savingLabel: _isEditMode ? 'Updating...' : null,
+              bottomNavigationBar: AnimatedBuilder(
+                animation: _tabController,
+                builder: (context, _) {
+                  final isTablet = MediaQuery.sizeOf(context).width >= 768;
+                  final isCartView = isTablet || _tabController.index == 2;
+                  return _BottomOrderSummary(
+                    itemCount: _selectedItemCount,
+                    total: _orderTotal,
+                    isSaving: _isSaving,
+                    canPlaceOrder: _canPlaceOrder,
+                    onPlaceOrder: isCartView ? _reviewAndPlaceOrder : () => _tabController.animateTo(2),
+                    formatPrice: _formatPrice,
+                    buttonLabel: isCartView
+                        ? (_isEditMode ? 'Review Changes' : null)
+                        : 'View Cart',
+                    savingLabel: _isEditMode ? 'Updating...' : null,
+                    icon: isCartView ? Icons.check_circle_outline : Icons.shopping_cart_outlined,
+                  );
+                },
               ),
             );
           },
@@ -701,22 +745,44 @@ class _OrderFlowTabs extends StatelessWidget {
       ),
       child: TabBar(
         controller: controller,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+        labelPadding: EdgeInsets.zero,
+        indicatorSize: TabBarIndicatorSize.tab,
         tabs: [
           Tab(
             key: const ValueKey('new-order-tab-table'),
-            icon: const Icon(Icons.table_restaurant_outlined),
-            text: tableLabel,
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.table_restaurant_outlined, size: 20),
+                const SizedBox(width: 6),
+                Text(tableLabel),
+              ],
+            ),
           ),
-          const Tab(
-            key: ValueKey('new-order-tab-menu'),
-            icon: Icon(Icons.restaurant_menu_outlined),
-            text: 'Menu',
+          Tab(
+            key: const ValueKey('new-order-tab-menu'),
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.restaurant_menu_outlined, size: 20),
+                const SizedBox(width: 6),
+                const Text('Menu'),
+              ],
+            ),
           ),
           Tab(
             key: const ValueKey('new-order-tab-cart'),
-            icon: const Icon(Icons.shopping_basket_outlined),
-            text: 'Cart $itemCount',
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.shopping_basket_outlined, size: 20),
+                const SizedBox(width: 6),
+                Text('Cart $itemCount'),
+              ],
+            ),
           ),
         ],
       ),
@@ -1057,6 +1123,7 @@ class _BottomOrderSummary extends StatelessWidget {
     required this.formatPrice,
     this.buttonLabel,
     this.savingLabel,
+    this.icon,
   });
 
   final int itemCount;
@@ -1067,6 +1134,7 @@ class _BottomOrderSummary extends StatelessWidget {
   final String Function(double value) formatPrice;
   final String? buttonLabel;
   final String? savingLabel;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -1113,7 +1181,7 @@ class _BottomOrderSummary extends StatelessWidget {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.check_circle_outline),
+                    : Icon(icon ?? Icons.check_circle_outline),
                 label: Text(
                   isSaving
                       ? savingLabel ?? 'Placing Order...'
