@@ -14,12 +14,14 @@ import 'order_detail_screen.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({
+    this.orderId,
     this.orderService,
     this.menuService,
     this.onGoToMenu,
     super.key,
   });
 
+  final String? orderId;
   final OrderService? orderService;
   final MenuService? menuService;
   final VoidCallback? onGoToMenu;
@@ -49,8 +51,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   int? _selectedTable;
   String _selectedCategory = _allCategory;
   bool _isSaving = false;
+  bool _isLoadingEditOrder = false;
+  String? _editLoadMessage;
   final Map<String, RestaurantMenuItem> _selectedItems = {};
   final Map<String, int> _selectedQuantities = {};
+  final Map<String, String> _existingLineItemIds = {};
+  final Set<String> _unavailableExistingItemIds = {};
+
+  bool get _isEditMode => widget.orderId != null;
 
   @override
   void initState() {
@@ -60,6 +68,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     _ordersStream = _orderService.watchOrders();
     _availableMenuItemsStream = _menuService.watchAvailableMenuItems();
     _searchController = TextEditingController()..addListener(_onSearchChanged);
+    if (_isEditMode) {
+      _loadOrderForEditing();
+    }
   }
 
   @override
@@ -88,19 +99,99 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   void _addItem(RestaurantMenuItem item) {
     setState(() {
-      _selectedItems[item.id] = item;
+      _selectedItems.putIfAbsent(item.id, () => item);
       _selectedQuantities[item.id] = 1;
     });
   }
 
   void _incrementItem(RestaurantMenuItem item) {
+    if (_unavailableExistingItemIds.contains(item.id)) {
+      return;
+    }
+
     setState(() {
-      _selectedItems[item.id] = item;
+      _selectedItems.putIfAbsent(item.id, () => item);
       final currentQuantity = _selectedQuantities[item.id] ?? 0;
       if (currentQuantity < _maxQuantity) {
         _selectedQuantities[item.id] = currentQuantity + 1;
       }
     });
+  }
+
+  Future<void> _loadOrderForEditing() async {
+    setState(() {
+      _isLoadingEditOrder = true;
+      _editLoadMessage = null;
+    });
+
+    try {
+      final orderId = widget.orderId!;
+      final order = await _orderService.getOrder(orderId);
+      if (!mounted) {
+        return;
+      }
+      if (order == null) {
+        setState(() {
+          _editLoadMessage = 'Order not found.';
+          _isLoadingEditOrder = false;
+        });
+        return;
+      }
+      if (order.status != OrderStatus.pending) {
+        setState(() {
+          _editLoadMessage =
+              'This order is no longer Pending and cannot be edited.';
+          _isLoadingEditOrder = false;
+        });
+        return;
+      }
+
+      final items = await _orderService.getOrderItems(orderId);
+      if (!mounted) {
+        return;
+      }
+      if (items.isEmpty) {
+        setState(() {
+          _editLoadMessage = 'No order items found.';
+          _isLoadingEditOrder = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _selectedTable = order.tableNo;
+        for (final item in items) {
+          _existingLineItemIds[item.menuItemId] = item.id;
+          _selectedItems[item.menuItemId] = RestaurantMenuItem(
+            id: item.menuItemId,
+            name: item.nameSnapshot,
+            price: item.priceSnapshot,
+            category: 'Existing Item',
+            available: true,
+          );
+          _selectedQuantities[item.menuItemId] = item.quantity;
+        }
+        _isLoadingEditOrder = false;
+      });
+    } on OrderServiceException catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _editLoadMessage =
+            'This order is no longer Pending and cannot be edited.';
+        _isLoadingEditOrder = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _editLoadMessage =
+            'Unable to load the order for editing. Please try again.';
+        _isLoadingEditOrder = false;
+      });
+    }
   }
 
   void _decrementItem(String itemId) {
@@ -133,6 +224,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     final shouldPlaceOrder = await showDialog<bool>(
       context: context,
       builder: (context) => _ConfirmOrderDialog(
+        isEditMode: _isEditMode,
         tableNo: tableNo,
         itemCount: _selectedItemCount,
         total: _orderTotal,
@@ -143,7 +235,50 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     );
 
     if (shouldPlaceOrder == true && mounted) {
-      await _placeOrder(tableNo);
+      if (_isEditMode) {
+        await _updateOrder(tableNo);
+      } else {
+        await _placeOrder(tableNo);
+      }
+    }
+  }
+
+  Future<void> _updateOrder(int tableNo) async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await _orderService.updatePendingOrder(
+        orderId: widget.orderId!,
+        tableNo: tableNo,
+        items: _buildOrderItems(),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order updated successfully.')),
+      );
+      Navigator.pop(context);
+    } on OrderServiceException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(_friendlyEditServiceMessage(error, tableNo));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('Unable to update the order. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -184,8 +319,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute<void>(
-          builder: (context) =>
-              OrderDetailScreen(orderId: orderId, orderService: _orderService),
+          builder: (context) => OrderDetailScreen(
+            orderId: orderId,
+            orderService: _orderService,
+            menuService: _menuService,
+          ),
         ),
       );
     } on OrderServiceException catch (error) {
@@ -214,14 +352,29 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     return _selectedQuantities.entries.map((entry) {
       final item = _selectedItems[entry.key]!;
       return OrderLineItem(
-        id: '',
-        orderId: '',
+        id: _existingLineItemIds[item.id] ?? '',
+        orderId: widget.orderId ?? '',
         menuItemId: item.id,
         nameSnapshot: item.name,
         priceSnapshot: item.price,
         quantity: entry.value,
       );
     }).toList();
+  }
+
+  String _friendlyEditServiceMessage(OrderServiceException error, int tableNo) {
+    return switch (error.failure) {
+      OrderServiceFailure.tableOccupied =>
+        'Table $tableNo already has an active order. '
+            'Please select another table.',
+      OrderServiceFailure.statusChanged =>
+        'This order has already changed and can no longer be edited.',
+      OrderServiceFailure.itemUnavailable =>
+        'One or more selected items are no longer available. '
+            'Please review the order.',
+      OrderServiceFailure.databaseFailure =>
+        'Unable to update the order. Please try again.',
+    };
   }
 
   String _friendlyServiceMessage(OrderServiceException error, int tableNo) {
@@ -286,6 +439,60 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingEditOrder) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Order')),
+        body: const SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading order for editing...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final editLoadMessage = _editLoadMessage;
+    if (editLoadMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Order')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 46,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    editLoadMessage,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.maybePop(context),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('Back'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return StreamBuilder<List<RestaurantOrder>>(
       stream: _ordersStream,
       builder: (context, ordersSnapshot) {
@@ -294,8 +501,22 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         return StreamBuilder<List<RestaurantMenuItem>>(
           stream: _availableMenuItemsStream,
           builder: (context, menuSnapshot) {
+            final availableItemIds =
+                (menuSnapshot.data ?? const <RestaurantMenuItem>[])
+                    .map((item) => item.id)
+                    .toSet();
+            _unavailableExistingItemIds
+              ..clear()
+              ..addAll(
+                _existingLineItemIds.keys.where(
+                  (itemId) => !availableItemIds.contains(itemId),
+                ),
+              );
+
             return Scaffold(
-              appBar: AppBar(title: const Text('New Order')),
+              appBar: AppBar(
+                title: Text(_isEditMode ? 'Edit Order' : 'New Order'),
+              ),
               resizeToAvoidBottomInset: true,
               body: SafeArea(
                 child: ListView(
@@ -303,9 +524,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   children: [
-                    const ScreenHeader(
-                      title: 'New Order',
-                      subtitle: 'Select a table and add menu items',
+                    ScreenHeader(
+                      title: _isEditMode ? 'Edit Order' : 'New Order',
+                      subtitle: _isEditMode
+                          ? 'Update the table or selected items'
+                          : 'Select a table and add menu items',
                     ),
                     const SizedBox(height: 22),
                     _SectionCard(
@@ -362,6 +585,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         selectedQuantities: _selectedQuantities,
                         onIncrement: _incrementItem,
                         onDecrement: _decrementItem,
+                        unavailableExistingItemIds: _unavailableExistingItemIds,
                         formatPrice: _formatPrice,
                       ),
                     ),
@@ -381,6 +605,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                 canPlaceOrder: _canPlaceOrder,
                 onPlaceOrder: _reviewAndPlaceOrder,
                 formatPrice: _formatPrice,
+                buttonLabel: _isEditMode ? 'Review Changes' : null,
+                savingLabel: _isEditMode ? 'Updating...' : null,
               ),
             );
           },
@@ -398,7 +624,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           (order) => switch (order.status) {
             OrderStatus.pending ||
             OrderStatus.preparing ||
-            OrderStatus.served => true,
+            OrderStatus.served => order.id != widget.orderId,
             OrderStatus.paid => false,
           },
         )
@@ -549,6 +775,7 @@ class _CurrentOrderSection extends StatelessWidget {
     required this.selectedQuantities,
     required this.onIncrement,
     required this.onDecrement,
+    required this.unavailableExistingItemIds,
     required this.formatPrice,
   });
 
@@ -556,6 +783,7 @@ class _CurrentOrderSection extends StatelessWidget {
   final Map<String, int> selectedQuantities;
   final ValueChanged<RestaurantMenuItem> onIncrement;
   final ValueChanged<String> onDecrement;
+  final Set<String> unavailableExistingItemIds;
   final String Function(double value) formatPrice;
 
   @override
@@ -576,11 +804,14 @@ class _CurrentOrderSection extends StatelessWidget {
       ),
       itemBuilder: (context, index) {
         final item = selectedItems[index];
+        final isUnavailable = unavailableExistingItemIds.contains(item.id);
         return OrderCartItem(
           item: item,
           quantity: selectedQuantities[item.id] ?? 0,
           onIncrement: () => onIncrement(item),
           onDecrement: () => onDecrement(item.id),
+          canIncrement: !isUnavailable,
+          warning: isUnavailable ? 'This item is no longer available' : null,
           formatPrice: formatPrice,
         );
       },
@@ -590,6 +821,7 @@ class _CurrentOrderSection extends StatelessWidget {
 
 class _ConfirmOrderDialog extends StatelessWidget {
   const _ConfirmOrderDialog({
+    required this.isEditMode,
     required this.tableNo,
     required this.itemCount,
     required this.total,
@@ -598,6 +830,7 @@ class _ConfirmOrderDialog extends StatelessWidget {
     required this.formatPrice,
   });
 
+  final bool isEditMode;
   final int tableNo;
   final int itemCount;
   final double total;
@@ -608,7 +841,7 @@ class _ConfirmOrderDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Confirm Order'),
+      title: Text(isEditMode ? 'Confirm Changes' : 'Confirm Order'),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,7 +853,11 @@ class _ConfirmOrderDialog extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text('$itemCount selected items'),
-            Text('Total: ${formatPrice(total)}'),
+            Text(
+              isEditMode
+                  ? 'Updated total: ${formatPrice(total)}'
+                  : 'Total: ${formatPrice(total)}',
+            ),
             const SizedBox(height: 16),
             for (final item in selectedItems.take(6))
               Padding(
@@ -641,7 +878,7 @@ class _ConfirmOrderDialog extends StatelessWidget {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: const Text('Place Order'),
+          child: Text(isEditMode ? 'Update Order' : 'Place Order'),
         ),
       ],
     );
@@ -715,6 +952,8 @@ class _BottomOrderSummary extends StatelessWidget {
     required this.canPlaceOrder,
     required this.onPlaceOrder,
     required this.formatPrice,
+    this.buttonLabel,
+    this.savingLabel,
   });
 
   final int itemCount;
@@ -723,6 +962,8 @@ class _BottomOrderSummary extends StatelessWidget {
   final bool canPlaceOrder;
   final VoidCallback onPlaceOrder;
   final String Function(double value) formatPrice;
+  final String? buttonLabel;
+  final String? savingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -771,7 +1012,9 @@ class _BottomOrderSummary extends StatelessWidget {
                       )
                     : const Icon(Icons.check_circle_outline),
                 label: Text(
-                  isSaving ? 'Placing Order...' : 'Review and Place Order',
+                  isSaving
+                      ? savingLabel ?? 'Placing Order...'
+                      : buttonLabel ?? 'Review and Place Order',
                 ),
               ),
             ],

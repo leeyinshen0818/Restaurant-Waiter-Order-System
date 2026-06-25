@@ -30,14 +30,32 @@ void main() {
     available: true,
   );
 
+  const editedOrder = RestaurantOrder(
+    id: 'order-1',
+    tableNo: 5,
+    status: OrderStatus.pending,
+    total: 19.99,
+  );
+
+  const editedBurger = OrderLineItem(
+    id: 'line-burger',
+    orderId: 'order-1',
+    menuItemId: 'menu-chicken',
+    nameSnapshot: 'Old Burger Snapshot',
+    priceSnapshot: 9.99,
+    quantity: 2,
+  );
+
   Widget buildScreen({
     FakeOrderService? orderService,
+    String? orderId,
     List<RestaurantOrder> orders = const [],
     List<RestaurantMenuItem> menuItems = const [chickenBurger, icedTea],
   }) {
     return MaterialApp(
       theme: AppTheme.light,
       home: NewOrderScreen(
+        orderId: orderId,
         orderService:
             orderService ??
             FakeOrderService(ordersStream: Stream.value(orders)),
@@ -65,6 +83,195 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('add-menu-menu-chicken')));
     await tester.pump();
   }
+
+  FakeOrderService editOrderService({
+    Object? updateError,
+    List<OrderLineItem> items = const [editedBurger],
+    List<RestaurantOrder> orders = const [editedOrder],
+  }) {
+    return FakeOrderService(
+      ordersStream: Stream.value(orders),
+      orderStream: Stream.value(editedOrder),
+      orderItemsStream: Stream.value(items),
+      order: editedOrder,
+      orderItems: items,
+      updatePendingOrderError: updateError,
+    );
+  }
+
+  testWidgets('edit mode preloads table number, items, quantities, and total', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildScreen(orderId: 'order-1', orderService: editOrderService()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Order'), findsWidgets);
+    expect(find.text('Review Changes'), findsOneWidget);
+
+    await scrollToFinder(tester, find.text('Old Burger Snapshot'));
+
+    expect(find.text('Old Burger Snapshot'), findsOneWidget);
+    expect(find.text('RM 9.99 × 2'), findsOneWidget);
+    expect(find.text('RM 19.98'), findsWidgets);
+  });
+
+  testWidgets(
+    'edit mode preserves existing snapshot price when quantity changes',
+    (tester) async {
+      await tester.pumpWidget(
+        buildScreen(orderId: 'order-1', orderService: editOrderService()),
+      );
+      await tester.pumpAndSettle();
+
+      await scrollToFinder(
+        tester,
+        find.byKey(const ValueKey('cart-increment-menu-chicken')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('cart-increment-menu-chicken')),
+      );
+      await tester.pump();
+
+      expect(find.text('RM 9.99 × 3'), findsOneWidget);
+      expect(find.text('RM 29.97'), findsWidgets);
+    },
+  );
+
+  testWidgets('edit mode adds a new item using current menu data', (
+    tester,
+  ) async {
+    final orderService = editOrderService();
+
+    await tester.pumpWidget(
+      buildScreen(orderId: 'order-1', orderService: orderService),
+    );
+    await tester.pumpAndSettle();
+
+    await scrollToFinder(
+      tester,
+      find.byKey(const ValueKey('add-menu-menu-tea')),
+    );
+    await tester.tap(find.byKey(const ValueKey('add-menu-menu-tea')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('review-place-order-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm Changes'), findsOneWidget);
+    expect(find.text('Updated total: RM 24.48'), findsOneWidget);
+
+    await tester.tap(find.text('Update Order'));
+    await tester.pumpAndSettle();
+
+    expect(orderService.updatePendingOrderCallCount, 1);
+    expect(orderService.lastEditedOrderId, 'order-1');
+    expect(orderService.lastEditedTableNo, 5);
+    final addedTea = orderService.lastUpdatedItems!.firstWhere(
+      (item) => item.menuItemId == 'menu-tea',
+    );
+    expect(addedTea.id, isEmpty);
+    expect(addedTea.nameSnapshot, 'Iced Lemon Tea');
+    expect(addedTea.priceSnapshot, 4.5);
+  });
+
+  testWidgets(
+    'existing unavailable item cannot be increased but can be removed',
+    (tester) async {
+      await tester.pumpWidget(
+        buildScreen(
+          orderId: 'order-1',
+          orderService: editOrderService(),
+          menuItems: const [icedTea],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await scrollToFinder(
+        tester,
+        find.byKey(const ValueKey('cart-increment-menu-chicken')),
+      );
+
+      expect(find.text('This item is no longer available'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('cart-increment-menu-chicken')),
+      );
+      await tester.pump();
+      expect(find.text('RM 9.99 × 2'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('cart-decrement-menu-chicken')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('cart-decrement-menu-chicken')),
+      );
+      await tester.pump();
+
+      expect(find.text('No items selected yet.'), findsOneWidget);
+      final reviewButton = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('review-place-order-button')),
+      );
+      expect(reviewButton.onPressed, isNull);
+    },
+  );
+
+  testWidgets(
+    'another occupied table cannot be selected while current table remains selectable',
+    (tester) async {
+      const otherOrder = RestaurantOrder(
+        id: 'order-2',
+        tableNo: 8,
+        status: OrderStatus.pending,
+        total: 10,
+      );
+
+      await tester.pumpWidget(
+        buildScreen(
+          orderId: 'order-1',
+          orderService: editOrderService(
+            orders: const [editedOrder, otherOrder],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Busy'), findsOneWidget);
+      await tester.tap(find.text('05'));
+      await tester.pump();
+
+      expect(
+        find.text('This table already has an active order.'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('failed edit update preserves the cart', (tester) async {
+    final orderService = editOrderService(
+      updateError: const OrderServiceException(
+        OrderServiceFailure.statusChanged,
+        'Changed',
+      ),
+    );
+
+    await tester.pumpWidget(
+      buildScreen(orderId: 'order-1', orderService: orderService),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('review-place-order-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Update Order'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('This order has already changed and can no longer be edited.'),
+      findsOneWidget,
+    );
+    await scrollToFinder(tester, find.text('Old Burger Snapshot'));
+    expect(find.text('Old Burger Snapshot'), findsOneWidget);
+  });
 
   testWidgets('selects a table and shows it in the confirmation dialog', (
     tester,

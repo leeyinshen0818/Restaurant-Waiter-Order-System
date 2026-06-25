@@ -9,6 +9,8 @@ class OrderCartItem extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.formatPrice,
+    this.canIncrement = true,
+    this.warning,
     super.key,
   });
 
@@ -17,6 +19,8 @@ class OrderCartItem extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final String Function(double value) formatPrice;
+  final bool canIncrement;
+  final String? warning;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,16 @@ class OrderCartItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text('${formatPrice(item.price)} × $quantity'),
+                if (warning != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    warning!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -58,7 +72,9 @@ class OrderCartItem extends StatelessWidget {
                     _CompactQuantityButton(
                       key: ValueKey('cart-increment-${item.id}'),
                       icon: Icons.add,
-                      onPressed: quantity >= 99 ? null : onIncrement,
+                      onPressed: quantity >= 99 || !canIncrement
+                          ? null
+                          : onIncrement,
                       tooltip: 'Increase ${item.name}',
                     ),
                   ],

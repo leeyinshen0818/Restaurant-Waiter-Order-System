@@ -78,8 +78,11 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (context) =>
-            OrderDetailScreen(orderId: order.id, orderService: _orderService),
+        builder: (context) => OrderDetailScreen(
+          orderId: order.id,
+          orderService: _orderService,
+          menuService: _menuService,
+        ),
       ),
     );
   }

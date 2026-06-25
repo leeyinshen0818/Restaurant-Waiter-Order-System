@@ -71,7 +71,10 @@ class OrderService {
         );
   }
 
-  Future<bool> hasActiveOrderForTable(int tableNo) async {
+  Future<bool> hasActiveOrderForTable(
+    int tableNo, {
+    String? excludingOrderId,
+  }) async {
     if (tableNo < 1) {
       throw ArgumentError.value(
         tableNo,
@@ -86,6 +89,9 @@ class OrderService {
           .get();
 
       return snapshot.docs.any((document) {
+        if (excludingOrderId != null && document.id == excludingOrderId) {
+          return false;
+        }
         final status = OrderStatus.tryFromFirestore(
           document.data()['status'] as String?,
         );
@@ -192,6 +198,153 @@ class OrderService {
     return orderDocument.id;
   }
 
+  Future<void> updatePendingOrder({
+    required String orderId,
+    required int tableNo,
+    required List<OrderLineItem> items,
+  }) async {
+    _requireDocumentId(orderId, 'orderId');
+    if (tableNo < 1) {
+      throw ArgumentError.value(
+        tableNo,
+        'tableNo',
+        'Table number must be at least 1.',
+      );
+    }
+    if (items.isEmpty) {
+      throw ArgumentError.value(
+        items,
+        'items',
+        'An order must contain at least one item.',
+      );
+    }
+    for (final item in items) {
+      _requireDocumentId(item.menuItemId, 'menuItemId');
+      if (item.quantity < 1) {
+        throw ArgumentError.value(
+          item.quantity,
+          'items',
+          'Every order item quantity must be at least 1.',
+        );
+      }
+    }
+
+    try {
+      final existingItemsSnapshot = await _orderItems
+          .where('order_id', isEqualTo: orderId)
+          .get();
+      final orderDocument = _orders.doc(orderId);
+      final orderSnapshot = await orderDocument.get();
+      if (!orderSnapshot.exists) {
+        throw const OrderServiceException(
+          OrderServiceFailure.statusChanged,
+          'This order can no longer be edited.',
+        );
+      }
+
+      final order = RestaurantOrder.fromFirestore(orderSnapshot);
+      if (order.status != OrderStatus.pending) {
+        throw const OrderServiceException(
+          OrderServiceFailure.statusChanged,
+          'This order can no longer be edited.',
+        );
+      }
+
+      final hasAnotherActiveOrder = await hasActiveOrderForTable(
+        tableNo,
+        excludingOrderId: orderId,
+      );
+      if (hasAnotherActiveOrder) {
+        throw OrderServiceException(
+          OrderServiceFailure.tableOccupied,
+          'Table $tableNo already has an active order.',
+        );
+      }
+
+      final existingItemsById = {
+        for (final document in existingItemsSnapshot.docs)
+          document.id: OrderLineItem.fromFirestore(document),
+      };
+      final synchronizedItems = await _synchronizedPendingItems(
+        items,
+        existingItemsById,
+      );
+      final total = synchronizedItems.fold<double>(
+        0,
+        (runningTotal, item) => runningTotal + item.subtotal,
+      );
+
+      final batch = _firestore.batch();
+      for (final document in existingItemsSnapshot.docs) {
+        batch.delete(document.reference);
+      }
+      for (final item in synchronizedItems) {
+        final itemDocument = _orderItems.doc();
+        batch.set(itemDocument, {
+          'order_id': orderId,
+          'menu_item_id': item.menuItemId,
+          'name_snapshot': item.nameSnapshot,
+          'price_snapshot': item.priceSnapshot,
+          'quantity': item.quantity,
+        });
+      }
+      batch.update(orderDocument, {
+        'table_no': tableNo,
+        'total': total,
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    } on OrderServiceException {
+      rethrow;
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to update the order.',
+      );
+    }
+  }
+
+  Future<void> deletePendingOrder(String orderId) async {
+    _requireDocumentId(orderId, 'orderId');
+
+    try {
+      final existingItemsSnapshot = await _orderItems
+          .where('order_id', isEqualTo: orderId)
+          .get();
+      final orderDocument = _orders.doc(orderId);
+      final orderSnapshot = await orderDocument.get();
+      if (!orderSnapshot.exists) {
+        throw const OrderServiceException(
+          OrderServiceFailure.statusChanged,
+          'This order can no longer be cancelled.',
+        );
+      }
+
+      final order = RestaurantOrder.fromFirestore(orderSnapshot);
+      if (order.status != OrderStatus.pending) {
+        throw const OrderServiceException(
+          OrderServiceFailure.statusChanged,
+          'This order can no longer be cancelled.',
+        );
+      }
+
+      final batch = _firestore.batch();
+      for (final document in existingItemsSnapshot.docs) {
+        batch.delete(document.reference);
+      }
+      batch.delete(orderDocument);
+      await batch.commit();
+    } on OrderServiceException {
+      rethrow;
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to cancel the order.',
+      );
+    }
+  }
+
   Future<void> updateOrderStatus({
     required String orderId,
     required OrderStatus nextStatus,
@@ -294,6 +447,31 @@ class OrderService {
     }
 
     return validatedItems;
+  }
+
+  Future<List<OrderLineItem>> _synchronizedPendingItems(
+    List<OrderLineItem> items,
+    Map<String, OrderLineItem> existingItemsById,
+  ) async {
+    final synchronizedItems = <OrderLineItem>[];
+
+    for (final item in items) {
+      final existingItem = existingItemsById[item.id];
+      if (existingItem != null) {
+        synchronizedItems.add(
+          existingItem.copyWith(
+            orderId: existingItem.orderId,
+            quantity: item.quantity,
+          ),
+        );
+        continue;
+      }
+
+      final validatedItem = await _validatedLineItems([item]);
+      synchronizedItems.add(validatedItem.single);
+    }
+
+    return synchronizedItems;
   }
 
   static bool _isActiveStatus(OrderStatus? status) {

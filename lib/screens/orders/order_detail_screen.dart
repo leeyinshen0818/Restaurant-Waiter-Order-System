@@ -3,22 +3,26 @@ import 'package:flutter/material.dart';
 import '../../models/order_line_item.dart';
 import '../../models/order_status.dart';
 import '../../models/restaurant_order.dart';
+import '../../services/menu_service.dart';
 import '../../services/order_service.dart';
 import '../../utils/order_status_style.dart';
 import '../../widgets/order_detail_item_card.dart';
 import '../../widgets/order_status_progress.dart';
+import 'new_order_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({
     required this.orderId,
     this.tableNo,
     this.orderService,
+    this.menuService,
     super.key,
   });
 
   final String orderId;
   final int? tableNo;
   final OrderService? orderService;
+  final MenuService? menuService;
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -26,14 +30,17 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late final OrderService _orderService;
+  late final MenuService? _menuService;
   late Stream<RestaurantOrder?> _orderStream;
   late Stream<List<OrderLineItem>> _orderItemsStream;
   bool _isUpdatingStatus = false;
+  bool _isCancelling = false;
 
   @override
   void initState() {
     super.initState();
     _orderService = widget.orderService ?? OrderService();
+    _menuService = widget.menuService;
     _orderStream = _orderService.watchOrder(widget.orderId);
     _orderItemsStream = _orderService.watchOrderItems(widget.orderId);
   }
@@ -52,7 +59,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _confirmStatusUpdate(RestaurantOrder order) async {
     final nextStatus = order.status.nextStatus;
-    if (nextStatus == null || _isUpdatingStatus) {
+    if (nextStatus == null || _isUpdatingStatus || _isCancelling) {
       return;
     }
 
@@ -104,6 +111,86 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (mounted) {
         setState(() {
           _isUpdatingStatus = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openEditOrder(RestaurantOrder order) async {
+    if (order.status != OrderStatus.pending ||
+        _isUpdatingStatus ||
+        _isCancelling) {
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => NewOrderScreen(
+          orderId: order.id,
+          orderService: _orderService,
+          menuService: _menuService ?? MenuService(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmCancelOrder(RestaurantOrder order) async {
+    if (order.status != OrderStatus.pending ||
+        _isUpdatingStatus ||
+        _isCancelling) {
+      return;
+    }
+
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => _CancelOrderDialog(order: order),
+    );
+
+    if (shouldCancel == true && mounted) {
+      await _cancelOrder(order);
+    }
+  }
+
+  Future<void> _cancelOrder(RestaurantOrder order) async {
+    setState(() {
+      _isCancelling = true;
+    });
+
+    try {
+      await _orderService.deletePendingOrder(order.id);
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Order for Table ${order.tableNo} cancelled successfully.',
+          ),
+        ),
+      );
+      Navigator.maybePop(context);
+    } on OrderServiceException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (error.failure == OrderServiceFailure.statusChanged) {
+        _showMessage(
+          'This order has already moved to another status and cannot be cancelled.',
+        );
+      } else {
+        _showMessage('Unable to cancel the order. Please try again.');
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('Unable to cancel the order. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCancelling = false;
         });
       }
     }
@@ -167,8 +254,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               order: order,
               itemsStream: _orderItemsStream,
               isUpdatingStatus: _isUpdatingStatus,
+              isCancelling: _isCancelling,
               onRetryItems: _retryItems,
+              onEditOrder: () => _openEditOrder(order),
               onAdvanceStatus: () => _confirmStatusUpdate(order),
+              onCancelOrder: () => _confirmCancelOrder(order),
             );
           },
         ),
@@ -182,15 +272,21 @@ class _OrderDetailContent extends StatelessWidget {
     required this.order,
     required this.itemsStream,
     required this.isUpdatingStatus,
+    required this.isCancelling,
     required this.onRetryItems,
+    required this.onEditOrder,
     required this.onAdvanceStatus,
+    required this.onCancelOrder,
   });
 
   final RestaurantOrder order;
   final Stream<List<OrderLineItem>> itemsStream;
   final bool isUpdatingStatus;
+  final bool isCancelling;
   final VoidCallback onRetryItems;
+  final VoidCallback onEditOrder;
   final VoidCallback onAdvanceStatus;
+  final VoidCallback onCancelOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +316,10 @@ class _OrderDetailContent extends StatelessWidget {
             _StatusActionCard(
               order: order,
               isUpdating: isUpdatingStatus,
+              isCancelling: isCancelling,
+              onEditOrder: onEditOrder,
               onAdvanceStatus: onAdvanceStatus,
+              onCancelOrder: onCancelOrder,
             ),
           ],
         );
@@ -320,16 +419,23 @@ class _StatusActionCard extends StatelessWidget {
   const _StatusActionCard({
     required this.order,
     required this.isUpdating,
+    required this.isCancelling,
+    required this.onEditOrder,
     required this.onAdvanceStatus,
+    required this.onCancelOrder,
   });
 
   final RestaurantOrder order;
   final bool isUpdating;
+  final bool isCancelling;
+  final VoidCallback onEditOrder;
   final VoidCallback onAdvanceStatus;
+  final VoidCallback onCancelOrder;
 
   @override
   Widget build(BuildContext context) {
     final nextStatus = order.status.nextStatus;
+    final isBusy = isUpdating || isCancelling;
     if (nextStatus == null) {
       return Card(
         child: Padding(
@@ -360,9 +466,18 @@ class _StatusActionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (order.status == OrderStatus.pending) ...[
+              OutlinedButton.icon(
+                key: const ValueKey('edit-order-button'),
+                onPressed: isBusy ? null : onEditOrder,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit Order'),
+              ),
+              const SizedBox(height: 10),
+            ],
             FilledButton.icon(
               key: const ValueKey('advance-status-button'),
-              onPressed: isUpdating ? null : onAdvanceStatus,
+              onPressed: isBusy ? null : onAdvanceStatus,
               icon: isUpdating
                   ? const SizedBox.square(
                       dimension: 18,
@@ -373,9 +488,57 @@ class _StatusActionCard extends StatelessWidget {
                 isUpdating ? 'Updating...' : _actionLabel(order.status),
               ),
             ),
+            if (order.status == OrderStatus.pending) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('cancel-order-button'),
+                onPressed: isBusy ? null : onCancelOrder,
+                icon: isCancelling
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                label: Text(isCancelling ? 'Cancelling...' : 'Cancel Order'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CancelOrderDialog extends StatelessWidget {
+  const _CancelOrderDialog({required this.order});
+
+  final RestaurantOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cancel Order?'),
+      content: Text(
+        'Are you sure you want to cancel the order for Table ${order.tableNo}?\n\n'
+        'This action cannot be undone.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Keep Order'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          child: const Text('Cancel Order'),
+        ),
+      ],
     );
   }
 }

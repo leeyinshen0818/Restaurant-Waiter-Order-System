@@ -9,6 +9,7 @@ import 'package:resto_order/screens/orders/order_detail_screen.dart';
 import 'package:resto_order/services/order_service.dart';
 import 'package:resto_order/theme/app_theme.dart';
 
+import 'fakes/fake_menu_service.dart';
 import 'fakes/fake_order_service.dart';
 
 void main() {
@@ -41,10 +42,17 @@ void main() {
     ),
   ];
 
-  Widget buildScreen(FakeOrderService orderService) {
+  Widget buildScreen(
+    FakeOrderService orderService, {
+    FakeMenuService? menuService,
+  }) {
     return MaterialApp(
       theme: AppTheme.light,
-      home: OrderDetailScreen(orderId: 'order-1', orderService: orderService),
+      home: OrderDetailScreen(
+        orderId: 'order-1',
+        orderService: orderService,
+        menuService: menuService,
+      ),
     );
   }
 
@@ -77,9 +85,9 @@ void main() {
       await tester.pumpWidget(buildScreen(fakeForStatus(status)));
       await tester.pumpAndSettle();
 
+      expect(find.text(status.displayLabel), findsWidgets);
       await scrollToFinder(tester, find.text(actionLabel));
       expect(find.text(actionLabel), findsOneWidget);
-      expect(find.text(status.displayLabel), findsWidgets);
     });
   }
 
@@ -90,6 +98,35 @@ void main() {
     await scrollToFinder(tester, find.text('Payment Completed'));
     expect(find.text('Payment Completed'), findsOneWidget);
     expect(find.byKey(const ValueKey('advance-status-button')), findsNothing);
+  });
+
+  testWidgets('Pending order displays Edit Order and Cancel Order', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildScreen(fakeForStatus(OrderStatus.pending)));
+    await tester.pumpAndSettle();
+
+    await scrollToFinder(
+      tester,
+      find.byKey(const ValueKey('edit-order-button')),
+    );
+
+    expect(find.text('Edit Order'), findsOneWidget);
+    expect(find.text('Cancel Order'), findsOneWidget);
+  });
+
+  testWidgets('non-Pending orders hide Edit and Cancel', (tester) async {
+    for (final status in [
+      OrderStatus.preparing,
+      OrderStatus.served,
+      OrderStatus.paid,
+    ]) {
+      await tester.pumpWidget(buildScreen(fakeForStatus(status)));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('edit-order-button')), findsNothing);
+      expect(find.byKey(const ValueKey('cancel-order-button')), findsNothing);
+    }
   });
 
   testWidgets('shows table number, total, date, and snapshot items', (
@@ -195,6 +232,70 @@ void main() {
       find.text(
         'This order status has already changed. '
         'The latest information is now displayed.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'Cancel confirmation appears and successful cancellation calls service',
+    (tester) async {
+      final orderService = fakeForStatus(OrderStatus.pending);
+
+      await tester.pumpWidget(buildScreen(orderService));
+      await tester.pumpAndSettle();
+
+      await scrollToFinder(
+        tester,
+        find.byKey(const ValueKey('cancel-order-button')),
+      );
+      await tester.tap(find.byKey(const ValueKey('cancel-order-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cancel Order?'), findsOneWidget);
+      expect(
+        find.textContaining('This action cannot be undone.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancel Order').last);
+      await tester.pumpAndSettle();
+
+      expect(orderService.deletePendingOrderCallCount, 1);
+      expect(orderService.lastDeletedOrderId, 'order-1');
+      expect(
+        find.text('Order for Table 8 cancelled successfully.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('failed cancellation keeps Order Detail open', (tester) async {
+    final orderService = FakeOrderService(
+      orderStream: Stream.value(orderWithStatus(OrderStatus.pending)),
+      orderItemsStream: Stream.value(orderItems),
+      deletePendingOrderError: const OrderServiceException(
+        OrderServiceFailure.statusChanged,
+        'Changed',
+      ),
+    );
+
+    await tester.pumpWidget(buildScreen(orderService));
+    await tester.pumpAndSettle();
+
+    await scrollToFinder(
+      tester,
+      find.byKey(const ValueKey('cancel-order-button')),
+    );
+    await tester.tap(find.byKey(const ValueKey('cancel-order-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel Order').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Order Detail'), findsOneWidget);
+    expect(
+      find.text(
+        'This order has already moved to another status and cannot be cancelled.',
       ),
       findsOneWidget,
     );
