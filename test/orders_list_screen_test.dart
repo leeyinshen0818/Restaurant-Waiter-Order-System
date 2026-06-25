@@ -108,7 +108,7 @@ void main() {
     await tester.tap(find.text('New Order'));
     await tester.pumpAndSettle();
 
-    expect(find.text('New order form'), findsOneWidget);
+    expect(find.text('Select a table and add menu items'), findsOneWidget);
   });
 
   testWidgets('blocks New Order when no menu items are available', (
@@ -126,6 +126,6 @@ void main() {
       find.text('Add or enable menu items before creating an order.'),
       findsNWidgets(2),
     );
-    expect(find.text('New order form'), findsNothing);
+    expect(find.text('Select a table and add menu items'), findsNothing);
   });
 }

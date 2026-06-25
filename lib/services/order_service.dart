@@ -2,8 +2,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/order_line_item.dart';
 import '../models/order_status.dart';
+import '../models/restaurant_menu_item.dart';
 import '../models/restaurant_order.dart';
 import '../utils/firestore_collections.dart';
+
+enum OrderServiceFailure { tableOccupied, itemUnavailable, databaseFailure }
+
+class OrderServiceException implements Exception {
+  const OrderServiceException(this.failure, this.message);
+
+  final OrderServiceFailure failure;
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 class OrderService {
   OrderService({FirebaseFirestore? firestore})
@@ -16,6 +29,9 @@ class OrderService {
 
   CollectionReference<Map<String, dynamic>> get _orderItems =>
       _firestore.collection(FirestoreCollections.orderItems);
+
+  CollectionReference<Map<String, dynamic>> get _menuItems =>
+      _firestore.collection(FirestoreCollections.menuItems);
 
   Stream<List<RestaurantOrder>> watchOrders() {
     return _orders
@@ -48,6 +64,34 @@ class OrderService {
         .map(
           (snapshot) => snapshot.docs.map(OrderLineItem.fromFirestore).toList(),
         );
+  }
+
+  Future<bool> hasActiveOrderForTable(int tableNo) async {
+    if (tableNo < 1) {
+      throw ArgumentError.value(
+        tableNo,
+        'tableNo',
+        'Table number must be at least 1.',
+      );
+    }
+
+    try {
+      final snapshot = await _orders
+          .where('table_no', isEqualTo: tableNo)
+          .get();
+
+      return snapshot.docs.any((document) {
+        final status = OrderStatus.tryFromFirestore(
+          document.data()['status'] as String?,
+        );
+        return _isActiveStatus(status);
+      });
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to verify table availability.',
+      );
+    }
   }
 
   Future<RestaurantOrder?> getOrder(String orderId) async {
@@ -86,6 +130,7 @@ class OrderService {
     }
 
     for (final item in items) {
+      _requireDocumentId(item.menuItemId, 'menuItemId');
       if (item.quantity < 1) {
         throw ArgumentError.value(
           item.quantity,
@@ -95,8 +140,17 @@ class OrderService {
       }
     }
 
+    final hasActiveOrder = await hasActiveOrderForTable(tableNo);
+    if (hasActiveOrder) {
+      throw OrderServiceException(
+        OrderServiceFailure.tableOccupied,
+        'Table $tableNo already has an active order.',
+      );
+    }
+
+    final validatedItems = await _validatedLineItems(items);
     final orderDocument = _orders.doc();
-    final total = items.fold<double>(
+    final total = validatedItems.fold<double>(
       0,
       (runningTotal, item) => runningTotal + item.subtotal,
     );
@@ -111,7 +165,7 @@ class OrderService {
     });
 
     // The order and all immutable line-item snapshots commit atomically.
-    for (final item in items) {
+    for (final item in validatedItems) {
       final itemDocument = _orderItems.doc();
       batch.set(itemDocument, {
         'order_id': orderDocument.id,
@@ -122,7 +176,14 @@ class OrderService {
       });
     }
 
-    await batch.commit();
+    try {
+      await batch.commit();
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to create the order.',
+      );
+    }
     return orderDocument.id;
   }
 
@@ -177,5 +238,56 @@ class OrderService {
         'Document ID cannot be empty.',
       );
     }
+  }
+
+  Future<List<OrderLineItem>> _validatedLineItems(
+    List<OrderLineItem> items,
+  ) async {
+    final validatedItems = <OrderLineItem>[];
+
+    try {
+      for (final item in items) {
+        final document = await _menuItems.doc(item.menuItemId).get();
+        if (!document.exists) {
+          throw const OrderServiceException(
+            OrderServiceFailure.itemUnavailable,
+            'One or more selected items are no longer available.',
+          );
+        }
+
+        final menuItem = RestaurantMenuItem.fromFirestore(document);
+        if (!menuItem.available) {
+          throw const OrderServiceException(
+            OrderServiceFailure.itemUnavailable,
+            'One or more selected items are no longer available.',
+          );
+        }
+
+        validatedItems.add(
+          item.copyWith(
+            nameSnapshot: menuItem.name,
+            priceSnapshot: menuItem.price,
+          ),
+        );
+      }
+    } on OrderServiceException {
+      rethrow;
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to validate selected menu items.',
+      );
+    }
+
+    return validatedItems;
+  }
+
+  static bool _isActiveStatus(OrderStatus? status) {
+    return switch (status) {
+      OrderStatus.pending ||
+      OrderStatus.preparing ||
+      OrderStatus.served => true,
+      OrderStatus.paid || null => false,
+    };
   }
 }

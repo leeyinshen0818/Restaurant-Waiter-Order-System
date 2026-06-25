@@ -64,7 +64,13 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute<void>(builder: (context) => const NewOrderScreen()),
+      MaterialPageRoute<void>(
+        builder: (context) => NewOrderScreen(
+          orderService: _orderService,
+          menuService: _menuService,
+          onGoToMenu: widget.onGoToMenu,
+        ),
+      ),
     );
   }
 
