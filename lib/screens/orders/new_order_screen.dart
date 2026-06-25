@@ -185,7 +185,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         context,
         MaterialPageRoute<void>(
           builder: (context) =>
-              OrderDetailScreen(orderId: orderId, tableNo: tableNo),
+              OrderDetailScreen(orderId: orderId, orderService: _orderService),
         ),
       );
     } on OrderServiceException catch (error) {
@@ -232,6 +232,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       OrderServiceFailure.itemUnavailable =>
         'One or more selected items are no longer available. '
             'Please review the order.',
+      OrderServiceFailure.statusChanged =>
+        'Unable to create the order. '
+            'Please check your connection and try again.',
       OrderServiceFailure.databaseFailure =>
         'Unable to create the order. '
             'Please check your connection and try again.',

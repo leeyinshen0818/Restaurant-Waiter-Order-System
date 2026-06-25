@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:resto_order/models/order_line_item.dart';
 import 'package:resto_order/models/order_status.dart';
 import 'package:resto_order/models/restaurant_menu_item.dart';
 import 'package:resto_order/models/restaurant_order.dart';
@@ -223,7 +224,27 @@ void main() {
   testWidgets('successful order creation calls service once and navigates', (
     tester,
   ) async {
-    final orderService = FakeOrderService();
+    final orderService = FakeOrderService(
+      orderStream: Stream.value(
+        RestaurantOrder(
+          id: 'created-order-id',
+          tableNo: 8,
+          status: OrderStatus.pending,
+          total: 12.9,
+          createdAt: DateTime(2026, 6, 25, 19, 42),
+        ),
+      ),
+      orderItemsStream: Stream.value(const [
+        OrderLineItem(
+          id: 'line-1',
+          orderId: 'created-order-id',
+          menuItemId: 'menu-chicken',
+          nameSnapshot: 'Chicken Burger',
+          priceSnapshot: 12.9,
+          quantity: 1,
+        ),
+      ]),
+    );
 
     await tester.pumpWidget(buildScreen(orderService: orderService));
     await tester.pumpAndSettle();
@@ -239,7 +260,7 @@ void main() {
     expect(orderService.lastTableNo, 8);
     expect(orderService.lastCreatedItems?.single.quantity, 1);
     expect(find.text('Order Detail'), findsWidgets);
-    expect(find.text('Table 08'), findsOneWidget);
+    expect(find.text('TABLE 08'), findsOneWidget);
   });
 
   testWidgets('unavailable item error preserves the cart', (tester) async {

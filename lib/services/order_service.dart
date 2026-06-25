@@ -6,7 +6,12 @@ import '../models/restaurant_menu_item.dart';
 import '../models/restaurant_order.dart';
 import '../utils/firestore_collections.dart';
 
-enum OrderServiceFailure { tableOccupied, itemUnavailable, databaseFailure }
+enum OrderServiceFailure {
+  tableOccupied,
+  itemUnavailable,
+  statusChanged,
+  databaseFailure,
+}
 
 class OrderServiceException implements Exception {
   const OrderServiceException(this.failure, this.message);
@@ -194,40 +199,49 @@ class OrderService {
     _requireDocumentId(orderId, 'orderId');
     final orderDocument = _orders.doc(orderId);
 
-    // The transaction validates against the latest persisted status.
-    await _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(orderDocument);
-      if (!snapshot.exists) {
-        throw StateError('Order "$orderId" does not exist.');
-      }
+    try {
+      // The transaction validates against the latest persisted status.
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(orderDocument);
+        if (!snapshot.exists) {
+          throw const OrderServiceException(
+            OrderServiceFailure.statusChanged,
+            'This order status has already changed.',
+          );
+        }
 
-      final statusValue = snapshot.data()?['status'];
-      final currentStatus = OrderStatus.tryFromFirestore(
-        statusValue is String ? statusValue : null,
-      );
-      if (currentStatus == null) {
-        throw StateError(
-          'Order "$orderId" has an unknown status: "$statusValue".',
+        final statusValue = snapshot.data()?['status'];
+        final currentStatus = OrderStatus.tryFromFirestore(
+          statusValue is String ? statusValue : null,
         );
-      }
+        if (currentStatus == null) {
+          throw const OrderServiceException(
+            OrderServiceFailure.statusChanged,
+            'This order status has already changed.',
+          );
+        }
 
-      final validNextStatus = currentStatus.nextStatus;
-      if (validNextStatus == null) {
-        throw StateError('Order "$orderId" is already Paid.');
-      }
-      if (nextStatus != validNextStatus) {
-        throw StateError(
-          'Invalid order status transition from '
-          '${currentStatus.displayLabel} to ${nextStatus.displayLabel}. '
-          'The next status must be ${validNextStatus.displayLabel}.',
-        );
-      }
+        final validNextStatus = currentStatus.nextStatus;
+        if (validNextStatus == null || nextStatus != validNextStatus) {
+          throw const OrderServiceException(
+            OrderServiceFailure.statusChanged,
+            'This order status has already changed.',
+          );
+        }
 
-      transaction.update(orderDocument, {
-        'status': nextStatus.firestoreValue,
-        'updated_at': FieldValue.serverTimestamp(),
+        transaction.update(orderDocument, {
+          'status': nextStatus.firestoreValue,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
       });
-    });
+    } on OrderServiceException {
+      rethrow;
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to update the order status.',
+      );
+    }
   }
 
   static void _requireDocumentId(String id, String parameterName) {

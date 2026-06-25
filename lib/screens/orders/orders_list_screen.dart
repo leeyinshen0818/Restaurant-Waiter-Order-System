@@ -79,7 +79,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       context,
       MaterialPageRoute<void>(
         builder: (context) =>
-            OrderDetailScreen(orderId: order.id, tableNo: order.tableNo),
+            OrderDetailScreen(orderId: order.id, orderService: _orderService),
       ),
     );
   }

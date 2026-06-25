@@ -111,6 +111,33 @@ void main() {
     expect(find.text('Select a table and add menu items'), findsOneWidget);
   });
 
+  testWidgets('opens Order Detail from an order card', (tester) async {
+    final order = orders.first;
+    final orderService = FakeOrderService(
+      ordersStream: Stream.value([order]),
+      orderStream: Stream.value(order),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: OrdersListScreen(
+          orderService: orderService,
+          menuService: FakeMenuService(
+            menuItemsStream: Stream.value(const [availableItem]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('View Details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Order Detail'), findsOneWidget);
+    expect(find.text('TABLE 08'), findsOneWidget);
+  });
+
   testWidgets('blocks New Order when no menu items are available', (
     tester,
   ) async {
