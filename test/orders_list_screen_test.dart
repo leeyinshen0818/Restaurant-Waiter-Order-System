@@ -73,7 +73,7 @@ void main() {
     expect(find.text('Pending 1'), findsOneWidget);
     expect(find.text('Preparing 1'), findsOneWidget);
     expect(find.text('Served 0'), findsOneWidget);
-    expect(find.text('Paid 0'), findsOneWidget);
+    expect(find.text('History 0'), findsOneWidget);
   });
 
   testWidgets('filters orders by status', (tester) async {
@@ -131,7 +131,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('View Details'));
+    await tester.tap(find.text('TABLE 08'));
     await tester.pumpAndSettle();
 
     expect(find.text('Order Detail'), findsOneWidget);
@@ -154,5 +154,28 @@ void main() {
       findsNWidgets(2),
     );
     expect(find.text('Select a table and add menu items'), findsNothing);
+  });
+
+  testWidgets('moves paid orders out of All and into History', (tester) async {
+    final paidOrder = RestaurantOrder(
+      id: 'paid-1',
+      tableNo: 9,
+      status: OrderStatus.paid,
+      total: 18.9,
+      createdAt: DateTime(2026, 6, 23, 21),
+    );
+
+    await tester.pumpWidget(buildScreen(orders: [...orders, paidOrder]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('All 2'), findsOneWidget);
+    expect(find.text('History 1'), findsOneWidget);
+    expect(find.text('TABLE 09'), findsNothing);
+
+    await tester.tap(find.text('History 1'));
+    await tester.pump();
+
+    expect(find.text('TABLE 09'), findsOneWidget);
+    expect(find.text('TABLE 08'), findsNothing);
   });
 }

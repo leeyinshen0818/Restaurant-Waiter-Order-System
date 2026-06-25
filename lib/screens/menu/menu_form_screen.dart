@@ -7,9 +7,15 @@ import '../../services/menu_service.dart';
 enum MenuFormResult { saved }
 
 class MenuFormScreen extends StatefulWidget {
-  const MenuFormScreen({this.item, this.menuService, super.key});
+  const MenuFormScreen({
+    this.item,
+    this.initialCategory,
+    this.menuService,
+    super.key,
+  });
 
   final RestaurantMenuItem? item;
+  final String? initialCategory;
   final MenuService? menuService;
 
   @override
@@ -44,8 +50,11 @@ class _MenuFormScreenState extends State<MenuFormScreen> {
     _priceController = TextEditingController(
       text: item == null ? '' : item.price.toStringAsFixed(2),
     );
+    final initialCategory = widget.initialCategory;
     _selectedCategory = item != null && _categories.contains(item.category)
         ? item.category
+        : initialCategory != null && _categories.contains(initialCategory)
+        ? initialCategory
         : null;
     _available = item?.available ?? true;
   }

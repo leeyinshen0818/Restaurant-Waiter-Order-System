@@ -65,17 +65,24 @@ void main() {
   }
 
   Future<void> scrollToFinder(WidgetTester tester, Finder finder) async {
-    await tester.scrollUntilVisible(
-      finder,
-      260,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await tester.ensureVisible(finder);
     await tester.pump();
   }
 
+  Future<void> openMenuTab(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('new-order-tab-menu')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openCartTab(WidgetTester tester) async {
+    await tester.tap(find.byKey(const ValueKey('new-order-tab-cart')));
+    await tester.pumpAndSettle();
+  }
+
   Future<void> selectTableAndAddBurger(WidgetTester tester) async {
+    await scrollToFinder(tester, find.text('08'));
     await tester.tap(find.text('08'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await scrollToFinder(
       tester,
       find.byKey(const ValueKey('add-menu-menu-chicken')),
@@ -110,6 +117,7 @@ void main() {
     expect(find.text('Edit Order'), findsWidgets);
     expect(find.text('Review Changes'), findsOneWidget);
 
+    await openCartTab(tester);
     await scrollToFinder(tester, find.text('Old Burger Snapshot'));
 
     expect(find.text('Old Burger Snapshot'), findsOneWidget);
@@ -125,6 +133,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await openCartTab(tester);
       await scrollToFinder(
         tester,
         find.byKey(const ValueKey('cart-increment-menu-chicken')),
@@ -149,6 +158,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     await scrollToFinder(
       tester,
       find.byKey(const ValueKey('add-menu-menu-tea')),
@@ -187,6 +197,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await openCartTab(tester);
       await scrollToFinder(
         tester,
         find.byKey(const ValueKey('cart-increment-menu-chicken')),
@@ -237,7 +248,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Busy'), findsOneWidget);
-      await tester.tap(find.text('05'));
+      await tester.tap(find.text('05').hitTestable());
       await tester.pump();
 
       expect(
@@ -269,6 +280,7 @@ void main() {
       find.text('This order has already changed and can no longer be edited.'),
       findsOneWidget,
     );
+    await openCartTab(tester);
     await scrollToFinder(tester, find.text('Old Burger Snapshot'));
     expect(find.text('Old Burger Snapshot'), findsOneWidget);
   });
@@ -284,7 +296,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Confirm Order'), findsOneWidget);
-    expect(find.text('Table 08'), findsOneWidget);
+    expect(find.text('Table 08'), findsWidgets);
   });
 
   testWidgets('occupied table cannot be selected or submitted', (tester) async {
@@ -300,8 +312,10 @@ void main() {
 
     expect(find.text('Busy'), findsOneWidget);
 
-    await tester.tap(find.text('08'));
+    await scrollToFinder(tester, find.text('08'));
+    await tester.tap(find.text('08'), warnIfMissed: false);
     await tester.pump();
+    await openMenuTab(tester);
     await scrollToFinder(
       tester,
       find.byKey(const ValueKey('add-menu-menu-chicken')),
@@ -321,6 +335,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     await scrollToFinder(
       tester,
       find.byKey(const ValueKey('add-menu-menu-chicken')),
@@ -328,20 +343,21 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('add-menu-menu-chicken')));
     await tester.pump();
 
+    await openCartTab(tester);
     expect(find.text('RM 12.90 × 1'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('increment-menu-menu-chicken')));
+    await tester.tap(find.byKey(const ValueKey('cart-increment-menu-chicken')));
     await tester.pump();
 
     expect(find.text('RM 12.90 × 2'), findsOneWidget);
     expect(find.text('RM 25.80'), findsWidgets);
 
-    await tester.tap(find.byKey(const ValueKey('decrement-menu-menu-chicken')));
+    await tester.tap(find.byKey(const ValueKey('cart-decrement-menu-chicken')));
     await tester.pump();
 
     expect(find.text('RM 12.90 × 1'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('decrement-menu-menu-chicken')));
+    await tester.tap(find.byKey(const ValueKey('cart-decrement-menu-chicken')));
     await tester.pump();
 
     expect(find.text('No items selected yet.'), findsOneWidget);
@@ -351,6 +367,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     await scrollToFinder(tester, find.byType(TextField));
     await tester.enterText(find.byType(TextField), 'tea');
     await tester.pump();
@@ -363,6 +380,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     final drinkChip = find.widgetWithText(FilterChip, 'Drink');
     await scrollToFinder(tester, drinkChip);
     await tester.tap(drinkChip);
@@ -376,6 +394,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     await scrollToFinder(
       tester,
       find.byKey(const ValueKey('add-menu-menu-chicken')),
@@ -393,8 +412,9 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await scrollToFinder(tester, find.text('08'));
     await tester.tap(find.text('08'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     final button = tester.widget<FilledButton>(
       find.byKey(const ValueKey('review-place-order-button')),
@@ -494,6 +514,7 @@ void main() {
       ),
       findsOneWidget,
     );
+    await openCartTab(tester);
     expect(find.text('RM 12.90 × 1'), findsOneWidget);
     expect(find.text('Chicken Burger'), findsWidgets);
   });
@@ -504,6 +525,7 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
 
+    await openMenuTab(tester);
     await scrollToFinder(tester, find.byType(TextField));
     await tester.enterText(find.byType(TextField), 'rendang');
     await tester.pump();

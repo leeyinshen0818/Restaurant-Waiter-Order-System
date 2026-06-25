@@ -18,10 +18,21 @@ class MenuListScreen extends StatefulWidget {
 }
 
 class _MenuListScreenState extends State<MenuListScreen> {
+  static const _allCategory = 'All';
+  static const _categories = [
+    _allCategory,
+    'Main Dish',
+    'Drink',
+    'Dessert',
+    'Side Dish',
+    'Other',
+  ];
+
   late final MenuService _menuService;
   late Stream<List<RestaurantMenuItem>> _menuItemsStream;
   MenuSeedService? _menuSeedService;
   final Set<String> _updatingAvailabilityIds = {};
+  String _selectedCategory = _allCategory;
 
   @override
   void initState() {
@@ -37,11 +48,17 @@ class _MenuListScreenState extends State<MenuListScreen> {
   }
 
   Future<void> _openMenuForm([RestaurantMenuItem? item]) async {
+    final initialCategory = item == null && _selectedCategory != _allCategory
+        ? _selectedCategory
+        : null;
     final result = await Navigator.push<MenuFormResult>(
       context,
       MaterialPageRoute<MenuFormResult>(
-        builder: (context) =>
-            MenuFormScreen(item: item, menuService: _menuService),
+        builder: (context) => MenuFormScreen(
+          item: item,
+          initialCategory: initialCategory,
+          menuService: _menuService,
+        ),
       ),
     );
 
@@ -185,23 +202,50 @@ class _MenuListScreenState extends State<MenuListScreen> {
                       );
                     }
 
-                    return ListView.separated(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      itemCount: items.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return MenuItemCard(
-                          item: item,
-                          availabilityLoading: _updatingAvailabilityIds
-                              .contains(item.id),
-                          onAvailabilityChanged: (value) =>
-                              _updateAvailability(item, value),
-                          onEdit: () => _openMenuForm(item),
-                          onDelete: () => _confirmDelete(item),
-                        );
-                      },
+                    final filteredItems = _filteredItems(items);
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _MenuCategoryFilters(
+                          categories: _categories,
+                          selectedCategory: _selectedCategory,
+                          counts: _MenuCategoryCounts.fromItems(items),
+                          onSelected: (category) {
+                            setState(() {
+                              _selectedCategory = category;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: filteredItems.isEmpty
+                              ? _MenuFilteredEmptyState(
+                                  category: _selectedCategory,
+                                  onAddItem: () => _openMenuForm(),
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  itemCount: filteredItems.length,
+                                  separatorBuilder: (context, index) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (context, index) {
+                                    final item = filteredItems[index];
+                                    return MenuItemCard(
+                                      item: item,
+                                      availabilityLoading:
+                                          _updatingAvailabilityIds.contains(
+                                            item.id,
+                                          ),
+                                      onAvailabilityChanged: (value) =>
+                                          _updateAvailability(item, value),
+                                      onEdit: () => _openMenuForm(item),
+                                      onDelete: () => _confirmDelete(item),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -214,6 +258,88 @@ class _MenuListScreenState extends State<MenuListScreen> {
         onPressed: _openMenuForm,
         icon: const Icon(Icons.add),
         label: const Text('Add Menu Item'),
+      ),
+    );
+  }
+
+  List<RestaurantMenuItem> _filteredItems(List<RestaurantMenuItem> items) {
+    if (_selectedCategory == _allCategory) {
+      return items;
+    }
+
+    return items
+        .where((item) => item.category == _selectedCategory)
+        .toList(growable: false);
+  }
+}
+
+class _MenuCategoryCounts {
+  const _MenuCategoryCounts(this._counts);
+
+  factory _MenuCategoryCounts.fromItems(List<RestaurantMenuItem> items) {
+    final counts = <String, int>{
+      _MenuListScreenState._allCategory: items.length,
+    };
+    for (final item in items) {
+      counts[item.category] = (counts[item.category] ?? 0) + 1;
+    }
+    return _MenuCategoryCounts(counts);
+  }
+
+  final Map<String, int> _counts;
+
+  int forCategory(String category) => _counts[category] ?? 0;
+}
+
+class _MenuCategoryFilters extends StatelessWidget {
+  const _MenuCategoryFilters({
+    required this.categories,
+    required this.selectedCategory,
+    required this.counts,
+    required this.onSelected,
+  });
+
+  final List<String> categories;
+  final String selectedCategory;
+  final _MenuCategoryCounts counts;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(right: 20),
+      child: Row(
+        children: [
+          for (final category in categories) ...[
+            if (category != categories.first) const SizedBox(width: 8),
+            FilterChip(
+              label: Text('$category ${counts.forCategory(category)}'),
+              selected: selectedCategory == category,
+              onSelected: (_) => onSelected(category),
+              selectedColor: colorScheme.primary,
+              backgroundColor: colorScheme.surface,
+              checkmarkColor: colorScheme.onPrimary,
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelStyle: TextStyle(
+                color: selectedCategory == category
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurface,
+                fontWeight: selectedCategory == category
+                    ? FontWeight.w700
+                    : FontWeight.w600,
+              ),
+              side: BorderSide(
+                color: selectedCategory == category
+                    ? colorScheme.primary
+                    : colorScheme.outline,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -284,6 +410,56 @@ class _MenuEmptyState extends StatelessWidget {
                   label: const Text('Load Sample Menu'),
                 ),
               ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuFilteredEmptyState extends StatelessWidget {
+  const _MenuFilteredEmptyState({
+    required this.category,
+    required this.onAddItem,
+  });
+
+  final String category;
+  final VoidCallback onAddItem;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.filter_alt_off_outlined,
+                size: 40,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'No $category items',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Add a new item to this category when it is ready.',
+                style: Theme.of(context).textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: onAddItem,
+                icon: const Icon(Icons.add),
+                label: Text('Add $category Item'),
+              ),
             ],
           ),
         ),

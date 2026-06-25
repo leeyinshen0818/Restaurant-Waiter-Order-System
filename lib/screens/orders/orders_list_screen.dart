@@ -5,6 +5,7 @@ import '../../models/restaurant_menu_item.dart';
 import '../../models/restaurant_order.dart';
 import '../../services/menu_service.dart';
 import '../../services/order_service.dart';
+import '../../utils/order_status_style.dart';
 import '../../widgets/order_card.dart';
 import '../../widgets/screen_header.dart';
 import 'new_order_screen.dart';
@@ -141,6 +142,10 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                         final counts = _OrderCounts.fromOrders(orders);
                         final filteredOrders = _selectedStatus == null
                             ? orders
+                                  .where(
+                                    (order) => order.status != OrderStatus.paid,
+                                  )
+                                  .toList()
                             : orders
                                   .where(
                                     (order) => order.status == _selectedStatus,
@@ -165,7 +170,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                             Expanded(
                               child: filteredOrders.isEmpty
                                   ? _NoFilteredOrdersState(
-                                      status: _selectedStatus!,
+                                      status: _selectedStatus,
                                     )
                                   : ListView.separated(
                                       padding: const EdgeInsets.only(
@@ -196,6 +201,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
             onPressed: () => _openNewOrder(hasAvailableMenuItems),
             icon: const Icon(Icons.add),
             label: const Text('New Order'),
+            extendedPadding: const EdgeInsets.symmetric(horizontal: 20),
           ),
         );
       },
@@ -239,8 +245,12 @@ class _OrderCounts {
     int count(OrderStatus status) =>
         orders.where((order) => order.status == status).length;
 
+    final activeCount = orders
+        .where((order) => order.status != OrderStatus.paid)
+        .length;
+
     return _OrderCounts(
-      all: orders.length,
+      all: activeCount,
       pending: count(OrderStatus.pending),
       preparing: count(OrderStatus.preparing),
       served: count(OrderStatus.served),
@@ -271,48 +281,109 @@ class _OrderSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _SummaryItem(label: 'Active', count: counts.active),
-        const SizedBox(width: 8),
-        _SummaryItem(label: 'Pending', count: counts.pending),
-        const SizedBox(width: 8),
-        _SummaryItem(label: 'Preparing', count: counts.preparing),
-        const SizedBox(width: 8),
-        _SummaryItem(label: 'Served', count: counts.served),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = constraints.maxWidth < 380
+            ? (constraints.maxWidth - 10) / 2
+            : (constraints.maxWidth - 30) / 4;
+
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _SummaryItem(
+              label: 'Active',
+              count: counts.active,
+              width: itemWidth,
+              accent: Theme.of(context).colorScheme.primary,
+            ),
+            _SummaryItem(
+              label: 'Pending',
+              count: counts.pending,
+              width: itemWidth,
+              accent: OrderStatusStyle.foreground(OrderStatus.pending),
+            ),
+            _SummaryItem(
+              label: 'Preparing',
+              count: counts.preparing,
+              width: itemWidth,
+              accent: OrderStatusStyle.foreground(OrderStatus.preparing),
+            ),
+            _SummaryItem(
+              label: 'Served',
+              count: counts.served,
+              width: itemWidth,
+              accent: OrderStatusStyle.foreground(OrderStatus.served),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _SummaryItem extends StatelessWidget {
-  const _SummaryItem({required this.label, required this.count});
+  const _SummaryItem({
+    required this.label,
+    required this.count,
+    required this.width,
+    required this.accent,
+  });
 
   final String label;
   final int count;
+  final double width;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: width,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           border: Border.all(color: Theme.of(context).colorScheme.outline),
           borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontSize: 18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 7,
+              height: 28,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    '$count',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontSize: 20,
+                      height: 1.05,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -336,6 +407,7 @@ class _OrderFilters extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(right: 20),
       child: Row(
         children: [
           _FilterChip(
@@ -346,7 +418,9 @@ class _OrderFilters extends StatelessWidget {
           for (final status in OrderStatus.values) ...[
             const SizedBox(width: 8),
             _FilterChip(
-              label: '${status.displayLabel} ${counts.forStatus(status)}',
+              label: status == OrderStatus.paid
+                  ? 'History ${counts.forStatus(status)}'
+                  : '${status.displayLabel} ${counts.forStatus(status)}',
               selected: selectedStatus == status,
               onSelected: () => onSelected(status),
             ),
@@ -379,9 +453,11 @@ class _FilterChip extends StatelessWidget {
       selectedColor: colorScheme.primary,
       backgroundColor: colorScheme.surface,
       checkmarkColor: colorScheme.onPrimary,
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       labelStyle: TextStyle(
         color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
-        fontWeight: FontWeight.w600,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
       ),
       side: BorderSide(
         color: selected ? colorScheme.primary : colorScheme.outline,
@@ -499,10 +575,22 @@ class _NoOrdersState extends StatelessWidget {
 class _NoFilteredOrdersState extends StatelessWidget {
   const _NoFilteredOrdersState({required this.status});
 
-  final OrderStatus status;
+  final OrderStatus? status;
 
   @override
   Widget build(BuildContext context) {
+    final selectedStatus = status;
+    final title = selectedStatus == null
+        ? 'No active orders'
+        : selectedStatus == OrderStatus.paid
+        ? 'No history orders'
+        : 'No ${selectedStatus.displayLabel} orders';
+    final message = selectedStatus == null
+        ? 'Paid orders are moved into History, so this view only shows active work.'
+        : selectedStatus == OrderStatus.paid
+        ? 'Paid orders will appear here after payment is completed.'
+        : 'There are no orders with this status right now.';
+
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -514,12 +602,13 @@ class _NoFilteredOrdersState extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'No ${status.displayLabel} orders',
+            title,
             style: Theme.of(context).textTheme.titleLarge,
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'There are no orders with this status right now.',
+            message,
             style: Theme.of(context).textTheme.bodyMedium,
             textAlign: TextAlign.center,
           ),

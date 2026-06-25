@@ -30,9 +30,11 @@ class NewOrderScreen extends StatefulWidget {
   State<NewOrderScreen> createState() => _NewOrderScreenState();
 }
 
-class _NewOrderScreenState extends State<NewOrderScreen> {
+class _NewOrderScreenState extends State<NewOrderScreen>
+    with SingleTickerProviderStateMixin {
   static const _maxQuantity = 99;
   static const _allCategory = 'All';
+  static const _menuTabIndex = 1;
   static const _categories = [
     _allCategory,
     'Main Dish',
@@ -47,6 +49,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   late final Stream<List<RestaurantOrder>> _ordersStream;
   late final Stream<List<RestaurantMenuItem>> _availableMenuItemsStream;
   late final TextEditingController _searchController;
+  late final TabController _tabController;
 
   int? _selectedTable;
   String _selectedCategory = _allCategory;
@@ -68,6 +71,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     _ordersStream = _orderService.watchOrders();
     _availableMenuItemsStream = _menuService.watchAvailableMenuItems();
     _searchController = TextEditingController()..addListener(_onSearchChanged);
+    _tabController = TabController(length: 3, vsync: this);
     if (_isEditMode) {
       _loadOrderForEditing();
     }
@@ -78,6 +82,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     _searchController
       ..removeListener(_onSearchChanged)
       ..dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -89,6 +94,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     setState(() {
       _selectedTable = tableNo;
     });
+    _tabController.animateTo(_menuTabIndex);
   }
 
   void _setCategory(String category) {
@@ -523,83 +529,114 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               ),
               resizeToAvoidBottomInset: true,
               body: SafeArea(
-                child: ListView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                  children: [
-                    ScreenHeader(
-                      title: _isEditMode ? 'Edit Order' : 'New Order',
-                      subtitle: _isEditMode
-                          ? 'Update the table or selected items'
-                          : 'Select a table and add menu items',
-                    ),
-                    const SizedBox(height: 22),
-                    _SectionCard(
-                      title: 'Select Table',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (ordersSnapshot.connectionState ==
-                              ConnectionState.waiting) ...[
-                            const LinearProgressIndicator(),
-                            const SizedBox(height: 12),
-                          ],
-                          TableSelectionGrid(
-                            tables: List.generate(20, (index) => index + 1),
-                            occupiedTables: occupiedTables,
-                            selectedTable: _selectedTable,
-                            onTableSelected: _selectTable,
-                          ),
-                          if (_selectedTable != null &&
-                              occupiedTables.contains(_selectedTable)) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              'This table already has an active order.',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontWeight: FontWeight.w600,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ScreenHeader(
+                        title: _isEditMode ? 'Edit Order' : 'New Order',
+                        subtitle: _isEditMode
+                            ? 'Update the table or selected items'
+                            : 'Select a table and add menu items',
+                      ),
+                      const SizedBox(height: 16),
+                      _OrderFlowTabs(
+                        controller: _tabController,
+                        itemCount: _selectedItemCount,
+                        selectedTable: _selectedTable,
+                      ),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _OrderFlowTabPage(
+                              child: _SectionCard(
+                                title: 'Select Table',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (ordersSnapshot.connectionState ==
+                                        ConnectionState.waiting) ...[
+                                      const LinearProgressIndicator(),
+                                      const SizedBox(height: 12),
+                                    ],
+                                    TableSelectionGrid(
+                                      tables: List.generate(
+                                        20,
+                                        (index) => index + 1,
+                                      ),
+                                      occupiedTables: occupiedTables,
+                                      selectedTable: _selectedTable,
+                                      onTableSelected: _selectTable,
+                                    ),
+                                    if (_selectedTable != null &&
+                                        occupiedTables.contains(
+                                          _selectedTable,
+                                        )) ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'This table already has an active order.',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                    if (_selectedTable != null &&
+                                        !occupiedTables.contains(
+                                          _selectedTable,
+                                        )) ...[
+                                      const SizedBox(height: 14),
+                                      _SelectedTableHint(
+                                        tableNo: _selectedTable!,
+                                        onContinue: () => _tabController
+                                            .animateTo(_menuTabIndex),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                            _OrderFlowTabPage(
+                              child: _SectionCard(
+                                title: 'Select Menu Items',
+                                child: _MenuItemsSection(
+                                  snapshot: menuSnapshot,
+                                  selectedCategory: _selectedCategory,
+                                  searchController: _searchController,
+                                  selectedQuantities: _selectedQuantities,
+                                  onCategorySelected: _setCategory,
+                                  onAdd: _addItem,
+                                  onIncrement: _incrementItem,
+                                  onDecrement: _decrementItem,
+                                  onGoBack: _goBackToMenuOrPreviousScreen,
+                                  formatPrice: _formatPrice,
+                                ),
+                              ),
+                            ),
+                            _OrderFlowTabPage(
+                              child: _SectionCard(
+                                title: 'Current Order',
+                                child: _CurrentOrderSection(
+                                  selectedItems: _cartItems,
+                                  selectedQuantities: _selectedQuantities,
+                                  onIncrement: _incrementItem,
+                                  onDecrement: _decrementItem,
+                                  unavailableExistingItemIds:
+                                      _unavailableExistingItemIds,
+                                  formatPrice: _formatPrice,
+                                ),
                               ),
                             ),
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Select Menu Items',
-                      child: _MenuItemsSection(
-                        snapshot: menuSnapshot,
-                        selectedCategory: _selectedCategory,
-                        searchController: _searchController,
-                        selectedQuantities: _selectedQuantities,
-                        onCategorySelected: _setCategory,
-                        onAdd: _addItem,
-                        onIncrement: _incrementItem,
-                        onDecrement: _decrementItem,
-                        onGoBack: _goBackToMenuOrPreviousScreen,
-                        formatPrice: _formatPrice,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Current Order',
-                      child: _CurrentOrderSection(
-                        selectedItems: _cartItems,
-                        selectedQuantities: _selectedQuantities,
-                        onIncrement: _incrementItem,
-                        onDecrement: _decrementItem,
-                        unavailableExistingItemIds: _unavailableExistingItemIds,
-                        formatPrice: _formatPrice,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _TotalCard(
-                      itemCount: _selectedItemCount,
-                      total: _orderTotal,
-                      formatPrice: _formatPrice,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               bottomNavigationBar: _BottomOrderSummary(
@@ -637,6 +674,103 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   static String _formatPrice(double value) => 'RM ${value.toStringAsFixed(2)}';
+}
+
+class _OrderFlowTabs extends StatelessWidget {
+  const _OrderFlowTabs({
+    required this.controller,
+    required this.itemCount,
+    required this.selectedTable,
+  });
+
+  final TabController controller;
+  final int itemCount;
+  final int? selectedTable;
+
+  @override
+  Widget build(BuildContext context) {
+    final tableLabel = selectedTable == null
+        ? 'Table'
+        : 'Table ${selectedTable.toString().padLeft(2, '0')}';
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: TabBar(
+        controller: controller,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+        tabs: [
+          Tab(
+            key: const ValueKey('new-order-tab-table'),
+            icon: const Icon(Icons.table_restaurant_outlined),
+            text: tableLabel,
+          ),
+          const Tab(
+            key: ValueKey('new-order-tab-menu'),
+            icon: Icon(Icons.restaurant_menu_outlined),
+            text: 'Menu',
+          ),
+          Tab(
+            key: const ValueKey('new-order-tab-cart'),
+            icon: const Icon(Icons.shopping_basket_outlined),
+            text: 'Cart $itemCount',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderFlowTabPage extends StatelessWidget {
+  const _OrderFlowTabPage({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.only(bottom: 16),
+      children: [child],
+    );
+  }
+}
+
+class _SelectedTableHint extends StatelessWidget {
+  const _SelectedTableHint({required this.tableNo, required this.onContinue});
+
+  final int tableNo;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Table ${tableNo.toString().padLeft(2, '0')} selected',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          TextButton(onPressed: onContinue, child: const Text('Order food')),
+        ],
+      ),
+    );
+  }
 }
 
 class _MenuItemsSection extends StatelessWidget {
@@ -906,41 +1040,6 @@ class _SectionCard extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 14),
             child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TotalCard extends StatelessWidget {
-  const _TotalCard({
-    required this.itemCount,
-    required this.total,
-    required this.formatPrice,
-  });
-
-  final int itemCount;
-  final double total;
-  final String Function(double value) formatPrice;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$itemCount items',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            Text(
-              formatPrice(total),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
           ],
         ),
       ),

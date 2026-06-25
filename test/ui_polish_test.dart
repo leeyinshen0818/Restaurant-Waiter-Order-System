@@ -4,6 +4,7 @@ import 'package:resto_order/models/order_status.dart';
 import 'package:resto_order/models/restaurant_menu_item.dart';
 import 'package:resto_order/models/restaurant_order.dart';
 import 'package:resto_order/screens/menu/menu_form_screen.dart';
+import 'package:resto_order/screens/orders/orders_list_screen.dart';
 import 'package:resto_order/theme/app_theme.dart';
 import 'package:resto_order/widgets/menu_item_card.dart';
 import 'package:resto_order/widgets/order_card.dart';
@@ -11,6 +12,7 @@ import 'package:resto_order/widgets/order_status_progress.dart';
 import 'package:resto_order/widgets/table_selection_grid.dart';
 
 import 'fakes/fake_menu_service.dart';
+import 'fakes/fake_order_service.dart';
 
 void main() {
   const longMenuItem = RestaurantMenuItem(
@@ -127,4 +129,72 @@ void main() {
     await tester.pump();
     expect(find.text('Save Menu Item'), findsOneWidget);
   });
+
+  testWidgets(
+    'orders list keeps filters and New Order action usable on narrow screen',
+    (tester) async {
+      const availableItem = RestaurantMenuItem(
+        id: 'menu-1',
+        name: 'Chicken Burger',
+        price: 12.9,
+        category: 'Main Dish',
+        available: true,
+      );
+
+      final orders = [
+        RestaurantOrder(
+          id: 'order-1',
+          tableNo: 1,
+          status: OrderStatus.pending,
+          total: 12.9,
+          createdAt: DateTime(2026, 6, 25, 19),
+        ),
+        RestaurantOrder(
+          id: 'order-2',
+          tableNo: 2,
+          status: OrderStatus.preparing,
+          total: 22,
+          createdAt: DateTime(2026, 6, 25, 19, 15),
+        ),
+        RestaurantOrder(
+          id: 'order-3',
+          tableNo: 3,
+          status: OrderStatus.served,
+          total: 30,
+          createdAt: DateTime(2026, 6, 25, 19, 30),
+        ),
+        RestaurantOrder(
+          id: 'order-4',
+          tableNo: 4,
+          status: OrderStatus.paid,
+          total: 44,
+          createdAt: DateTime(2026, 6, 25, 20),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: SizedBox(
+            width: 320,
+            height: 720,
+            child: OrdersListScreen(
+              orderService: FakeOrderService(
+                ordersStream: Stream.value(orders),
+              ),
+              menuService: FakeMenuService(
+                menuItemsStream: Stream.value(const [availableItem]),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('History 1'), findsOneWidget);
+      expect(find.text('New Order'), findsOneWidget);
+    },
+  );
 }

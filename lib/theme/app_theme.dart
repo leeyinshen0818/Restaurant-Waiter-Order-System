@@ -1,28 +1,37 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static const Color primaryTerracotta = Color(0xFFB85C38);
-  static const Color darkTerracotta = Color(0xFF8F3F24);
-  static const Color backgroundCream = Color(0xFFFFF9F3);
+  static const Color primaryDark = Color(0xFF2D2926);
+  static const Color primaryDarkHover = Color(0xFF211E1C);
+  static const Color primaryTerracotta = Color(0xFFC4623F);
+  static const Color darkTerracotta = Color(0xFFA84B30);
+  static const Color softTerracotta = Color(0xFFF4E3DC);
+  static const Color backgroundCream = Color(0xFFF7F5F2);
   static const Color cardBackground = Color(0xFFFFFFFF);
-  static const Color mainText = Color(0xFF2D2A26);
-  static const Color secondaryText = Color(0xFF756F68);
-  static const Color border = Color(0xFFE8DED5);
-  static const Color error = Color(0xFFC94C4C);
+  static const Color mainText = Color(0xFF292624);
+  static const Color secondaryText = Color(0xFF746E68);
+  static const Color mutedText = Color(0xFF9A948E);
+  static const Color border = Color(0xFFE6E0DA);
+  static const Color softSurface = Color(0xFFF1EEE9);
+  static const Color error = Color(0xFFB94A48);
 
   static final ColorScheme _colorScheme =
       ColorScheme.fromSeed(
         seedColor: primaryTerracotta,
         brightness: Brightness.light,
       ).copyWith(
-        primary: primaryTerracotta,
+        primary: primaryDark,
         onPrimary: Colors.white,
-        primaryContainer: const Color(0xFFF6DED3),
+        primaryContainer: softTerracotta,
         onPrimaryContainer: darkTerracotta,
-        secondary: darkTerracotta,
+        secondary: primaryTerracotta,
         onSecondary: Colors.white,
+        secondaryContainer: softTerracotta,
+        onSecondaryContainer: darkTerracotta,
         surface: cardBackground,
         onSurface: mainText,
+        surfaceContainerHighest: softSurface,
+        onSurfaceVariant: secondaryText,
         outline: border,
         error: error,
         onError: Colors.white,
@@ -72,7 +81,7 @@ abstract final class AppTheme {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: primaryTerracotta,
+        backgroundColor: primaryDark,
         foregroundColor: Colors.white,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -82,7 +91,8 @@ abstract final class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: primaryTerracotta,
+        backgroundColor: cardBackground,
+        foregroundColor: primaryDark,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         side: const BorderSide(color: border),
@@ -92,7 +102,7 @@ abstract final class AppTheme {
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: darkTerracotta,
+        foregroundColor: primaryTerracotta,
         textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       ),
     ),
@@ -129,7 +139,7 @@ abstract final class AppTheme {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: primaryTerracotta, width: 2),
+        borderSide: const BorderSide(color: primaryTerracotta, width: 1.6),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -143,20 +153,20 @@ abstract final class AppTheme {
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: cardBackground,
       surfaceTintColor: Colors.transparent,
-      elevation: 3,
+      elevation: 0,
       height: 68,
-      indicatorColor: const Color(0xFFF6DED3),
+      indicatorColor: softTerracotta,
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
           color: states.contains(WidgetState.selected)
-              ? darkTerracotta
+              ? primaryTerracotta
               : secondaryText,
         ),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (states) => TextStyle(
           color: states.contains(WidgetState.selected)
-              ? darkTerracotta
+              ? primaryTerracotta
               : secondaryText,
           fontWeight: states.contains(WidgetState.selected)
               ? FontWeight.w700
@@ -167,7 +177,7 @@ abstract final class AppTheme {
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: primaryTerracotta,
       foregroundColor: Colors.white,
-      elevation: 3,
+      elevation: 2,
       shape: StadiumBorder(),
       extendedTextStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
     ),
@@ -183,13 +193,12 @@ abstract final class AppTheme {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected)
-            ? primaryTerracotta
-            : secondaryText,
+        (states) =>
+            states.contains(WidgetState.selected) ? primaryDark : secondaryText,
       ),
       trackColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.selected)
-            ? primaryTerracotta.withValues(alpha: 0.28)
+            ? primaryTerracotta.withValues(alpha: 0.22)
             : border,
       ),
     ),

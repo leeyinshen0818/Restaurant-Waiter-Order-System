@@ -16,70 +16,83 @@ class OrderCard extends StatelessWidget {
     final isPaid = order.status == OrderStatus.paid;
 
     return Opacity(
-      opacity: isPaid ? 0.78 : 1,
+      opacity: isPaid ? 0.88 : 1,
       child: Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: IntrinsicHeight(
+            child: Row(
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'TABLE ${order.tableNo.toString().padLeft(2, '0')}',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    _OrderStatusBadge(status: order.status),
-                  ],
+                Container(
+                  width: 5,
+                  color: OrderStatusStyle.foreground(
+                    order.status,
+                  ).withValues(alpha: isPaid ? 0.45 : 0.85),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Created at ${_formatTime(order.createdAt)}',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          'RM ${order.total.toStringAsFixed(2)}',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            color: theme.colorScheme.primary,
-                          ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'TABLE ${order.tableNo.toString().padLeft(2, '0')}',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontSize: 20,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w900,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _OrderStatusBadge(status: order.status),
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Created ${_formatTime(order.createdAt)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'RM ${order.total.toStringAsFixed(2)}',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    height: 1.05,
+                                    color: theme.colorScheme.onSurface,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right,
+                              color: theme.colorScheme.secondary,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      'View Details',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right, color: theme.colorScheme.primary),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -111,14 +124,17 @@ class _OrderStatusBadge extends StatelessWidget {
     final foreground = OrderStatusStyle.foreground(status);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: OrderStatusStyle.background(status),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: OrderStatusStyle.foreground(status).withValues(alpha: 0.18),
+        ),
       ),
       child: Text(
         status.displayLabel,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
           color: foreground,
           fontWeight: FontWeight.w700,
         ),
