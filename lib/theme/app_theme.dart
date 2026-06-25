@@ -51,8 +51,23 @@ abstract final class AppTheme {
       margin: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: border),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: cardBackground,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      titleTextStyle: const TextStyle(
+        color: mainText,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+      ),
+      contentTextStyle: const TextStyle(
+        color: mainText,
+        fontSize: 15,
+        height: 1.35,
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -78,8 +93,25 @@ abstract final class AppTheme {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: darkTerracotta,
-        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
       ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: cardBackground,
+      selectedColor: primaryTerracotta,
+      side: const BorderSide(color: border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      labelStyle: const TextStyle(
+        color: mainText,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      secondaryLabelStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+      ),
+      checkmarkColor: Colors.white,
     ),
     inputDecorationTheme: InputDecorationThemeData(
       filled: true,
@@ -112,7 +144,7 @@ abstract final class AppTheme {
       backgroundColor: cardBackground,
       surfaceTintColor: Colors.transparent,
       elevation: 3,
-      height: 72,
+      height: 68,
       indicatorColor: const Color(0xFFF6DED3),
       iconTheme: WidgetStateProperty.resolveWith(
         (states) => IconThemeData(
@@ -139,7 +171,29 @@ abstract final class AppTheme {
       shape: StadiumBorder(),
       extendedTextStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
     ),
-    dividerTheme: const DividerThemeData(color: border),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: mainText,
+      contentTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? primaryTerracotta
+            : secondaryText,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? primaryTerracotta.withValues(alpha: 0.28)
+            : border,
+      ),
+    ),
+    dividerTheme: const DividerThemeData(color: border, space: 1),
     textTheme: const TextTheme(
       headlineMedium: TextStyle(
         color: mainText,
@@ -152,8 +206,19 @@ abstract final class AppTheme {
         fontSize: 20,
         fontWeight: FontWeight.w700,
       ),
+      titleMedium: TextStyle(
+        color: mainText,
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
+      ),
+      titleSmall: TextStyle(
+        color: mainText,
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+      ),
       bodyLarge: TextStyle(color: mainText, fontSize: 16),
       bodyMedium: TextStyle(color: secondaryText, fontSize: 14),
+      bodySmall: TextStyle(color: secondaryText, fontSize: 12),
     ),
   );
 }

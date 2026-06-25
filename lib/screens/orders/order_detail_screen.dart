@@ -466,15 +466,6 @@ class _StatusActionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (order.status == OrderStatus.pending) ...[
-              OutlinedButton.icon(
-                key: const ValueKey('edit-order-button'),
-                onPressed: isBusy ? null : onEditOrder,
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit Order'),
-              ),
-              const SizedBox(height: 10),
-            ],
             FilledButton.icon(
               key: const ValueKey('advance-status-button'),
               onPressed: isBusy ? null : onAdvanceStatus,
@@ -489,6 +480,13 @@ class _StatusActionCard extends StatelessWidget {
               ),
             ),
             if (order.status == OrderStatus.pending) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                key: const ValueKey('edit-order-button'),
+                onPressed: isBusy ? null : onEditOrder,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit Order'),
+              ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
                 key: const ValueKey('cancel-order-button'),

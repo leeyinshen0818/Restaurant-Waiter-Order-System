@@ -28,32 +28,35 @@ class OrderMenuItemCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(item.category),
-                  const SizedBox(height: 8),
-                  Text(
-                    formatPrice(item.price),
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            quantity == 0
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final useVerticalLayout = constraints.maxWidth < 320;
+
+            final details = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.category,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  formatPrice(item.price),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: colorScheme.primary),
+                ),
+              ],
+            );
+
+            final controls = quantity == 0
                 ? IconButton.filled(
                     key: ValueKey('add-menu-${item.id}'),
                     onPressed: onAdd,
@@ -65,8 +68,27 @@ class OrderMenuItemCard extends StatelessWidget {
                     quantity: quantity,
                     onIncrement: onIncrement,
                     onDecrement: onDecrement,
-                  ),
-          ],
+                  );
+
+            if (useVerticalLayout) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  details,
+                  const SizedBox(height: 12),
+                  Align(alignment: Alignment.centerRight, child: controls),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: details),
+                const SizedBox(width: 12),
+                controls,
+              ],
+            );
+          },
         ),
       ),
     );
