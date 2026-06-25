@@ -1,6 +1,14 @@
 # resto_order
 
-A new Flutter project.
+Restaurant Waiter Order System built with Flutter and Firebase Firestore.
+
+## Firestore classroom-use note
+
+This assignment intentionally has no login, authentication, or role management:
+the only app user is a waiter. If this project is using Firestore test-mode or
+open development rules, that is suitable only for classroom development and
+emulator testing. Do not deploy the app unchanged for a real restaurant system
+without adding proper Firebase security rules and authentication.
 
 ## Getting Started
 

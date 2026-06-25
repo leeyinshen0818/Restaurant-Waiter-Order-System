@@ -364,6 +364,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   String _friendlyEditServiceMessage(OrderServiceException error, int tableNo) {
     return switch (error.failure) {
+      OrderServiceFailure.invalidInput =>
+        'Unable to create the order. Please review the table and items.',
       OrderServiceFailure.tableOccupied =>
         'Table $tableNo already has an active order. '
             'Please select another table.',
@@ -379,6 +381,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   String _friendlyServiceMessage(OrderServiceException error, int tableNo) {
     return switch (error.failure) {
+      OrderServiceFailure.invalidInput =>
+        'Unable to update the order. Please review the table and items.',
       OrderServiceFailure.tableOccupied =>
         'Table $tableNo already has an active order. '
             'Please select another table.',

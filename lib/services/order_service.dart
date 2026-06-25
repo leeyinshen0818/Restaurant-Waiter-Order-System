@@ -7,6 +7,7 @@ import '../models/restaurant_order.dart';
 import '../utils/firestore_collections.dart';
 
 enum OrderServiceFailure {
+  invalidInput,
   tableOccupied,
   itemUnavailable,
   statusChanged,
@@ -26,6 +27,11 @@ class OrderServiceException implements Exception {
 class OrderService {
   OrderService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  static const int minTableNo = 1;
+  static const int maxTableNo = 20;
+  static const int minQuantity = 1;
+  static const int maxQuantity = 99;
 
   final FirebaseFirestore _firestore;
 
@@ -75,13 +81,7 @@ class OrderService {
     int tableNo, {
     String? excludingOrderId,
   }) async {
-    if (tableNo < 1) {
-      throw ArgumentError.value(
-        tableNo,
-        'tableNo',
-        'Table number must be at least 1.',
-      );
-    }
+    validateTableNo(tableNo);
 
     try {
       final snapshot = await _orders
@@ -95,7 +95,7 @@ class OrderService {
         final status = OrderStatus.tryFromFirestore(
           document.data()['status'] as String?,
         );
-        return _isActiveStatus(status);
+        return isActiveStatus(status);
       });
     } on FirebaseException catch (_) {
       throw const OrderServiceException(
@@ -108,49 +108,43 @@ class OrderService {
   Future<RestaurantOrder?> getOrder(String orderId) async {
     _requireDocumentId(orderId, 'orderId');
 
-    final document = await _orders.doc(orderId).get();
-    return document.exists ? RestaurantOrder.fromFirestore(document) : null;
+    try {
+      final document = await _orders.doc(orderId).get();
+      return document.exists ? RestaurantOrder.fromFirestore(document) : null;
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to load the order.',
+      );
+    }
   }
 
   Future<List<OrderLineItem>> getOrderItems(String orderId) async {
     _requireDocumentId(orderId, 'orderId');
 
-    final snapshot = await _orderItems
-        .where('order_id', isEqualTo: orderId)
-        .get();
-    return snapshot.docs.map(OrderLineItem.fromFirestore).toList();
+    try {
+      final snapshot = await _orderItems
+          .where('order_id', isEqualTo: orderId)
+          .get();
+      return snapshot.docs.map(OrderLineItem.fromFirestore).toList();
+    } on FirebaseException catch (_) {
+      throw const OrderServiceException(
+        OrderServiceFailure.databaseFailure,
+        'Unable to load the ordered items.',
+      );
+    }
   }
 
   Future<String> createOrder({
     required int tableNo,
     required List<OrderLineItem> items,
   }) async {
-    if (tableNo < 1) {
-      throw ArgumentError.value(
-        tableNo,
-        'tableNo',
-        'Table number must be at least 1.',
-      );
-    }
-    if (items.isEmpty) {
-      throw ArgumentError.value(
-        items,
-        'items',
-        'An order must contain at least one item.',
-      );
-    }
+    validateTableNo(tableNo);
+    final normalizedItems = normalizeNewOrderItems(items);
 
-    for (final item in items) {
-      _requireDocumentId(item.menuItemId, 'menuItemId');
-      if (item.quantity < 1) {
-        throw ArgumentError.value(
-          item.quantity,
-          'items',
-          'Every order item quantity must be at least 1.',
-        );
-      }
-    }
-
+    // This recheck prevents stale UI selections from creating obvious
+    // duplicates. A fully atomic table reservation would require a separate
+    // table/reservation document, which is intentionally outside this schema.
     final hasActiveOrder = await hasActiveOrderForTable(tableNo);
     if (hasActiveOrder) {
       throw OrderServiceException(
@@ -159,12 +153,13 @@ class OrderService {
       );
     }
 
-    final validatedItems = await _validatedLineItems(items);
+    final validatedItems = await _validatedLineItems(normalizedItems);
     final orderDocument = _orders.doc();
     final total = validatedItems.fold<double>(
       0,
       (runningTotal, item) => runningTotal + item.subtotal,
     );
+    validateOrderTotal(total);
     final batch = _firestore.batch();
 
     batch.set(orderDocument, {
@@ -204,30 +199,8 @@ class OrderService {
     required List<OrderLineItem> items,
   }) async {
     _requireDocumentId(orderId, 'orderId');
-    if (tableNo < 1) {
-      throw ArgumentError.value(
-        tableNo,
-        'tableNo',
-        'Table number must be at least 1.',
-      );
-    }
-    if (items.isEmpty) {
-      throw ArgumentError.value(
-        items,
-        'items',
-        'An order must contain at least one item.',
-      );
-    }
-    for (final item in items) {
-      _requireDocumentId(item.menuItemId, 'menuItemId');
-      if (item.quantity < 1) {
-        throw ArgumentError.value(
-          item.quantity,
-          'items',
-          'Every order item quantity must be at least 1.',
-        );
-      }
-    }
+    validateTableNo(tableNo);
+    validateOrderItemsNotEmpty(items);
 
     try {
       final existingItemsSnapshot = await _orderItems
@@ -250,6 +223,8 @@ class OrderService {
         );
       }
 
+      // Recheck the destination table immediately before writing so a stale
+      // edit screen cannot move into a table already active in Firestore.
       final hasAnotherActiveOrder = await hasActiveOrderForTable(
         tableNo,
         excludingOrderId: orderId,
@@ -273,6 +248,7 @@ class OrderService {
         0,
         (runningTotal, item) => runningTotal + item.subtotal,
       );
+      validateOrderTotal(total);
 
       final batch = _firestore.batch();
       for (final document in existingItemsSnapshot.docs) {
@@ -407,6 +383,70 @@ class OrderService {
     }
   }
 
+  static void validateTableNo(int tableNo) {
+    if (tableNo < minTableNo || tableNo > maxTableNo) {
+      throw OrderServiceException(
+        OrderServiceFailure.invalidInput,
+        'Table number must be between $minTableNo and $maxTableNo.',
+      );
+    }
+  }
+
+  static void validateQuantity(int quantity) {
+    if (quantity < minQuantity || quantity > maxQuantity) {
+      throw OrderServiceException(
+        OrderServiceFailure.invalidInput,
+        'Quantity must be between $minQuantity and $maxQuantity.',
+      );
+    }
+  }
+
+  static void validateMoney(double value, String label) {
+    if (!value.isFinite || value <= 0) {
+      throw OrderServiceException(
+        OrderServiceFailure.invalidInput,
+        '$label must be greater than zero.',
+      );
+    }
+  }
+
+  static void validateOrderTotal(double total) {
+    validateMoney(total, 'Order total');
+  }
+
+  static void validateOrderItemsNotEmpty(List<OrderLineItem> items) {
+    if (items.isEmpty) {
+      throw const OrderServiceException(
+        OrderServiceFailure.invalidInput,
+        'An order must contain at least one item.',
+      );
+    }
+  }
+
+  static List<OrderLineItem> normalizeNewOrderItems(List<OrderLineItem> items) {
+    validateOrderItemsNotEmpty(items);
+
+    final itemsByMenuId = <String, OrderLineItem>{};
+    final quantitiesByMenuId = <String, int>{};
+
+    for (final item in items) {
+      _requireDocumentId(item.menuItemId, 'menuItemId');
+      validateQuantity(item.quantity);
+
+      final runningQuantity =
+          (quantitiesByMenuId[item.menuItemId] ?? 0) + item.quantity;
+      validateQuantity(runningQuantity);
+
+      itemsByMenuId.putIfAbsent(item.menuItemId, () => item);
+      quantitiesByMenuId[item.menuItemId] = runningQuantity;
+    }
+
+    return [
+      for (final entry in itemsByMenuId.entries)
+        entry.value.copyWith(quantity: quantitiesByMenuId[entry.key]),
+    ];
+  }
+
   Future<List<OrderLineItem>> _validatedLineItems(
     List<OrderLineItem> items,
   ) async {
@@ -429,6 +469,7 @@ class OrderService {
             'One or more selected items are no longer available.',
           );
         }
+        validateMoney(menuItem.price, 'Menu item price');
 
         validatedItems.add(
           item.copyWith(
@@ -453,33 +494,62 @@ class OrderService {
     List<OrderLineItem> items,
     Map<String, OrderLineItem> existingItemsById,
   ) async {
-    final synchronizedItems = <OrderLineItem>[];
+    final accumulators = <String, _PendingLineItemAccumulator>{};
 
     for (final item in items) {
-      final existingItem = existingItemsById[item.id];
-      if (existingItem != null) {
-        synchronizedItems.add(
-          existingItem.copyWith(
-            orderId: existingItem.orderId,
-            quantity: item.quantity,
-          ),
-        );
-        continue;
-      }
+      _requireDocumentId(item.menuItemId, 'menuItemId');
+      validateQuantity(item.quantity);
 
-      final validatedItem = await _validatedLineItems([item]);
-      synchronizedItems.add(validatedItem.single);
+      final accumulator = accumulators.putIfAbsent(
+        item.menuItemId,
+        () => _PendingLineItemAccumulator(item),
+      );
+      accumulator.add(item, existingItemsById[item.id]);
+    }
+
+    final synchronizedItems = <OrderLineItem>[];
+    for (final accumulator in accumulators.values) {
+      validateQuantity(accumulator.quantity);
+      final existingItem = accumulator.existingItem;
+      if (existingItem != null) {
+        validateMoney(existingItem.priceSnapshot, 'Order item price');
+        synchronizedItems.add(
+          existingItem.copyWith(quantity: accumulator.quantity),
+        );
+      } else {
+        final validatedItem = await _validatedLineItems([
+          accumulator.prototype.copyWith(quantity: accumulator.quantity),
+        ]);
+        synchronizedItems.add(validatedItem.single);
+      }
+    }
+
+    if (synchronizedItems.isEmpty) {
+      validateOrderItemsNotEmpty(synchronizedItems);
     }
 
     return synchronizedItems;
   }
 
-  static bool _isActiveStatus(OrderStatus? status) {
+  static bool isActiveStatus(OrderStatus? status) {
     return switch (status) {
       OrderStatus.pending ||
       OrderStatus.preparing ||
       OrderStatus.served => true,
       OrderStatus.paid || null => false,
     };
+  }
+}
+
+class _PendingLineItemAccumulator {
+  _PendingLineItemAccumulator(this.prototype) : quantity = 0;
+
+  final OrderLineItem prototype;
+  int quantity;
+  OrderLineItem? existingItem;
+
+  void add(OrderLineItem item, OrderLineItem? matchingExistingItem) {
+    quantity += item.quantity;
+    existingItem ??= matchingExistingItem;
   }
 }
