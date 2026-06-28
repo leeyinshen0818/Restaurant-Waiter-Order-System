@@ -13,7 +13,10 @@ class ScreenHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 2),
         Text(
           subtitle,

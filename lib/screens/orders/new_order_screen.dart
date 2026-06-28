@@ -683,13 +683,17 @@ class _NewOrderScreenState extends State<NewOrderScreen>
                     total: _orderTotal,
                     isSaving: _isSaving,
                     canPlaceOrder: _canPlaceOrder,
-                    onPlaceOrder: isCartView ? _reviewAndPlaceOrder : () => _tabController.animateTo(2),
+                    onPlaceOrder: isCartView
+                        ? _reviewAndPlaceOrder
+                        : () => _tabController.animateTo(2),
                     formatPrice: _formatPrice,
                     buttonLabel: isCartView
                         ? (_isEditMode ? 'Review Changes' : null)
                         : 'View Cart',
                     savingLabel: _isEditMode ? 'Updating...' : null,
-                    icon: isCartView ? Icons.check_circle_outline : Icons.shopping_cart_outlined,
+                    icon: isCartView
+                        ? Icons.check_circle_outline
+                        : Icons.shopping_cart_outlined,
                   );
                 },
               ),

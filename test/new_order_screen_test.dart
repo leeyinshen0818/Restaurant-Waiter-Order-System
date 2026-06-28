@@ -51,15 +51,26 @@ void main() {
     String? orderId,
     List<RestaurantOrder> orders = const [],
     List<RestaurantMenuItem> menuItems = const [chickenBurger, icedTea],
+    Size screenSize = const Size(500, 932),
   }) {
     return MaterialApp(
       theme: AppTheme.light,
-      home: NewOrderScreen(
-        orderId: orderId,
-        orderService:
-            orderService ??
-            FakeOrderService(ordersStream: Stream.value(orders)),
-        menuService: FakeMenuService(menuItemsStream: Stream.value(menuItems)),
+      home: Center(
+        child: MediaQuery(
+          data: MediaQueryData(size: screenSize),
+          child: SizedBox.fromSize(
+            size: screenSize,
+            child: NewOrderScreen(
+              orderId: orderId,
+              orderService:
+                  orderService ??
+                  FakeOrderService(ordersStream: Stream.value(orders)),
+              menuService: FakeMenuService(
+                menuItemsStream: Stream.value(menuItems),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -89,6 +100,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('add-menu-menu-chicken')));
     await tester.pump();
+    await openCartTab(tester);
   }
 
   FakeOrderService editOrderService({
@@ -106,6 +118,25 @@ void main() {
     );
   }
 
+  testWidgets('tablet layout shows table, menu, and cart without mobile tabs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildScreen(screenSize: const Size(900, 844)));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('new-order-tab-table')), findsNothing);
+    expect(find.byKey(const ValueKey('new-order-tab-menu')), findsNothing);
+    expect(find.byKey(const ValueKey('new-order-tab-cart')), findsNothing);
+    expect(find.text('Select Table'), findsOneWidget);
+    expect(find.text('Current Order'), findsOneWidget);
+    expect(find.text('Review and Place Order'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await tester.pump();
+
+    expect(find.text('Select Menu Items'), findsOneWidget);
+  });
+
   testWidgets('edit mode preloads table number, items, quantities, and total', (
     tester,
   ) async {
@@ -115,9 +146,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Edit Order'), findsWidgets);
-    expect(find.text('Review Changes'), findsOneWidget);
 
     await openCartTab(tester);
+    expect(find.text('Review Changes'), findsOneWidget);
     await scrollToFinder(tester, find.text('Old Burger Snapshot'));
 
     expect(find.text('Old Burger Snapshot'), findsOneWidget);
@@ -165,6 +196,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('add-menu-menu-tea')));
     await tester.pump();
+    await openCartTab(tester);
     await tester.tap(find.byKey(const ValueKey('review-place-order-button')));
     await tester.pumpAndSettle();
 
@@ -271,6 +303,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await openCartTab(tester);
     await tester.tap(find.byKey(const ValueKey('review-place-order-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Update Order'));
